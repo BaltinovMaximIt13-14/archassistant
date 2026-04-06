@@ -1,4 +1,42 @@
 package com.ertekom.archassistant.domain.entity;
 
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "messages")
+@Getter
+@Setter
+@NoArgsConstructor
 public class Message {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "messageId",nullable = false)
+    private UUID id;
+
+    @Column(nullable = false)
+    private String role;   // 'user' or 'assistant'
+
+    @Column(columnDefinition = "TEXT")
+    private String content;
+
+    @CreationTimestamp
+    @Column(name = "created_at")
+    private OffsetDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @ManyToOne
+    @JoinColumn(name = "chat_id")
+    private Chat chat;
 }

@@ -1,20 +1,69 @@
 plugins {
     id 'java'
+    id 'org.springframework.boot' version '3.5.7'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
-group = 'com.ertekom.archassistant'
-version = '1.0-SNAPSHOT'
+group = 'com.ertekom'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '21'
 
 repositories {
     mavenCentral()
+    maven { url 'https://repo.spring.io/milestone' }
+
+}
+
+ext {
+    set('springAiVersion', "1.0.0-M5")
 }
 
 dependencies {
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // Spring Boot starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Spring AI
+    implementation 'org.springframework.ai:spring-ai-ollama-spring-boot-starter'
+    implementation 'org.springframework.ai:spring-ai-pgvector-store-spring-boot-starter'
+
+    // PostgreSQL
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // Git operations (JGit)
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:6.10.0.202406032230-r'
+
+    // Tika for text extraction
+    implementation 'org.apache.tika:tika-core:2.9.2'
+
+    // ODF generation
+    implementation 'org.odftoolkit:odfdom-java:0.13.0'
+
+    // OpenAPI
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
+    // Lombok (optional but convenient)
+    compileOnly 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'org.projectlombok:lombok:1.18.36'
+
+    implementation 'org.apache.tika:tika-parsers-standard-package:2.9.2'
+
+    // Для DOCX (Apache POI)
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+
+    // Для PDF (PDFBox)
+    implementation 'org.apache.pdfbox:pdfbox:3.0.2'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-test {
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
+}
+
+tasks.named('test') {
     useJUnitPlatform()
 }
