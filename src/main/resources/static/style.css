@@ -85,3 +85,50 @@ body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; }
 .chat-active { background: rgba(255,255,255,0.1); border-left: 4px solid #0054a6; color: white !important; }
 .dot-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #0054a6; animation: pulse 1.2s infinite ease-in-out; }
 @keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+
+/* Общие настройки */
+body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+.font-headline { font-family: 'Manrope', sans-serif; }
+
+/* ТЕМНАЯ ТЕМА (По умолчанию) */
+html.dark body { background-color: #000; color: #fff; }
+html.dark .sidebar { background-color: #050505; border-color: rgba(255,255,255,0.1); }
+html.dark .main-bg { background-color: #050505; }
+html.dark .header-bg { background-color: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.1); }
+html.dark .input-box { background-color: #1a1a1a; border-color: rgba(255,255,255,0.1); }
+html.dark #user-input { color: white; }
+
+/* СВЕТЛАЯ ТЕМА */
+html:not(.dark) body { background-color: #f3f4f6; color: #1f2937; }
+html:not(.dark) .sidebar { background-color: #ffffff; border-color: #e5e7eb; }
+html:not(.dark) .logo-text { color: #111827; }
+html:not(.dark) .btn-new-chat { background-color: #111827; color: white; }
+html:not(.dark) .btn-new-chat:hover { background-color: #374151; }
+html:not(.dark) .main-bg { background-color: #f9fafb; }
+html:not(.dark) .header-bg { background-color: white; border-color: #e5e7eb; }
+html:not(.dark) #active-chat-title { color: #6b7280; }
+html:not(.dark) .input-area-container { from: #f9fafb; via: #f9fafb; } /* Убираем черный градиент */
+html:not(.dark) .input-box { background-color: white; border-color: #d1d5db; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+html:not(.dark) #user-input { color: #111827; }
+html:not(.dark) .footer-brand p { color: #9ca3af; }
+html:not(.dark) .ai-content { color: #374151; }
+html:not(.dark) .ai-content strong { color: #111827; }
+html:not(.dark) .ai-content h3 { color: #111827; }
+html:not(.dark) .ai-content pre { background: #f1f5f9; border: 1px solid #e2e8f0; }
+html:not(.dark) .ai-content code { background: #e2e8f0; color: #000; }
+
+/* Markdown & UI */
+.ai-content { line-height: 1.6; font-size: 0.95rem; white-space: normal; }
+.ai-content p { margin-bottom: 1.25rem; }
+.ai-content h3 { font-family: 'Manrope'; font-weight: 800; margin: 1.5rem 0 0.5rem 0; }
+.ai-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.25rem; }
+.ai-content pre { padding: 1rem; border-radius: 0.75rem; overflow-x: auto; margin-bottom: 1.25rem; }
+.ai-content code { padding: 0.2rem 0.4rem; border-radius: 0.4rem; font-family: monospace; }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+
+.chat-active { background: #0054a6 !important; color: white !important; }
+
+.dot-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #0054a6; animation: pulse 1.2s infinite ease-in-out; }
+@keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }

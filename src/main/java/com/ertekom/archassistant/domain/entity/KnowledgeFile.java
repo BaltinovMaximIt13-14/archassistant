@@ -1,5 +1,7 @@
 package com.ertekom.archassistant.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -44,9 +46,11 @@ public class KnowledgeFile {
 
     @ManyToOne
     @JoinColumn(name = "source_id")
+    @JsonBackReference
     private KnowledgeSource source;
 
     @OneToMany(mappedBy = "file", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
     private List<KnowledgeContent> contents = new ArrayList<>();
 
 }

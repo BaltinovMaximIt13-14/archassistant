@@ -1,5 +1,6 @@
 package com.ertekom.archassistant.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,6 +40,7 @@ public class KnowledgeSource {
     private OffsetDateTime lastSync;
 
     @OneToMany(mappedBy = "source", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
     private List<KnowledgeFile> files = new ArrayList<>();
 
 }
