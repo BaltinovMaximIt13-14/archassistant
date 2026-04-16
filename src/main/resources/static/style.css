@@ -159,3 +159,21 @@ button.bg-green-600:hover {
 #knowledge-chevron {
     transition: transform 0.3s;
 }
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Градиент для области ввода в тёмной теме */
+html.dark .input-area-container {
+    background: linear-gradient(to top, #000000, rgba(0,0,0,0.8), transparent);
+}
+
+/* В светлой теме убираем градиент (или делаем светлый) */
+html:not(.dark) .input-area-container {
+    background: transparent; /* или любой светлый фон, например #f9fafb */
+}

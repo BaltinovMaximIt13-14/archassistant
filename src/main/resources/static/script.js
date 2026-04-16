@@ -5,7 +5,7 @@
     let currentEventSource = null;
     let isLoading = false;
 
-    // DOM элементы (с проверкой существования)
+    // DOM элементы
     const chatWindow = document.getElementById('chat-window');
     const loader = document.getElementById('loader');
     const stopBtn = document.getElementById('stop-stream-btn');
@@ -349,11 +349,82 @@
         });
     }
 
-    // ---------- УПРАВЛЕНИЕ БАЗОЙ ЗНАНИЙ ----------
+    // ---------- УПРАВЛЕНИЕ ИСТОЧНИКАМИ ЗНАНИЙ ----------
+    const STORAGE_KEY = 'knowledge_sources_names';
     const sourceModal = document.getElementById('source-modal');
     const sourceUrl = document.getElementById('source-url');
     const sourceBranch = document.getElementById('source-branch');
     const sourcePath = document.getElementById('source-path');
+    const sourceDisplayName = document.getElementById('source-display-name');
+
+    async function loadKnowledgeSources() {
+        try {
+            const res = await fetch('/api/knowledge-sources');
+            if (!res.ok) throw new Error('Ошибка загрузки источников');
+            const sources = await res.json();
+            renderSourcesList(sources);
+        } catch (e) {
+            console.error('Не удалось загрузить источники:', e);
+        }
+    }
+
+    function renderSourcesList(sources) {
+        const container = document.getElementById('knowledge-sources-list');
+        if (!container) return;
+
+        const namesMap = getLocalNamesMap();
+
+        if (sources.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-xs text-center py-2">Нет добавленных источников</p>';
+            return;
+        }
+
+        container.innerHTML = sources.map(source => {
+            const displayName = namesMap[source.id] || source.repositoryUrl.split('/').pop() || 'Источник';
+            return `
+            <div class="group flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-all border border-outline-variant/50">
+                <div class="flex items-center gap-2 overflow-hidden">
+                    <span class="material-symbols-outlined text-gray-400 text-base">folder</span>
+                    <span class="truncate" title="${source.repositoryUrl}">${escapeHtml(displayName)}</span>
+                </div>
+                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onclick="syncKnowledgeSource('${source.id}')" class="p-1 hover:bg-primary/20 rounded" title="Синхронизировать">
+                        <span class="material-symbols-outlined text-sm">sync</span>
+                    </button>
+                    <button onclick="deleteKnowledgeSource('${source.id}')" class="p-1 hover:bg-red-500/20 rounded text-red-400" title="Удалить">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                </div>
+            </div>
+        `;
+        }).join('');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function getLocalNamesMap() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        } catch {
+            return {};
+        }
+    }
+
+    function saveLocalName(sourceId, name) {
+        const map = getLocalNamesMap();
+        map[sourceId] = name;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    }
+
+    function removeLocalName(sourceId) {
+        const map = getLocalNamesMap();
+        delete map[sourceId];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    }
 
     window.openAddSourceModal = function() {
         if (sourceModal) {
@@ -361,6 +432,7 @@
             if (sourceUrl) sourceUrl.value = '';
             if (sourceBranch) sourceBranch.value = 'main';
             if (sourcePath) sourcePath.value = '';
+            if (sourceDisplayName) sourceDisplayName.value = '';
         }
     };
 
@@ -376,6 +448,7 @@
         }
         const branch = sourceBranch?.value.trim() || 'main';
         const localPath = sourcePath?.value.trim() || '/knowledge';
+        const displayName = sourceDisplayName?.value.trim() || url.split('/').pop() || 'Источник';
 
         try {
             const res = await fetch('/api/knowledge-sources', {
@@ -385,15 +458,36 @@
             });
             if (!res.ok) throw new Error('Ошибка создания источника');
             const data = await res.json();
-            alert(`Источник "${data.repositoryUrl}" добавлен (ID: ${data.id})`);
+
+            saveLocalName(data.id, displayName);
             closeSourceModal();
+            await loadKnowledgeSources();
+            alert(`Источник "${displayName}" добавлен.`);
         } catch (e) {
             alert('Не удалось добавить источник: ' + e.message);
             console.error(e);
         }
     };
 
-    window.syncAllKnowledgeSources = async function() {
+    window.syncKnowledgeSource = async function(sourceId) {
+        const btn = event.currentTarget;
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-sm">sync</span>';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/knowledge/sync/${sourceId}`, { method: 'POST' });
+            const data = await res.json();
+            alert(data.message || 'Синхронизация завершена');
+        } catch (e) {
+            alert('Ошибка синхронизации: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+        }
+    };
+
+    window.syncAllKnowledgeSources = async function(event) {
         const btn = event.currentTarget;
         btn.disabled = true;
         const originalText = btn.innerHTML;
@@ -411,12 +505,27 @@
         }
     };
 
+    window.deleteKnowledgeSource = async function(sourceId) {
+        if (!confirm('Удалить источник знаний? Это также удалит все связанные данные из базы.')) return;
+
+        try {
+            const res = await fetch(`/api/knowledge-sources/${sourceId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Ошибка удаления');
+            removeLocalName(sourceId);
+            await loadKnowledgeSources();
+        } catch (e) {
+            alert('Не удалось удалить источник: ' + e.message);
+        }
+    };
+
     if (sourceModal) {
         sourceModal.addEventListener('click', (e) => {
             if (e.target === sourceModal) closeSourceModal();
         });
     }
 
+    // Инициализация
     initTheme();
     loadChats();
+    loadKnowledgeSources();
 })();
