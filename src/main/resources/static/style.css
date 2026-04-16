@@ -1,0 +1,87 @@
+/* Основные шрифты и фон */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #000;
+    color: #fff;
+}
+
+.font-headline {
+    font-family: 'Manrope', sans-serif;
+}
+
+/* Оформление контента от ИИ (Markdown) */
+.ai-content {
+    line-height: 1.6;
+    font-size: 0.95rem;
+    color: #e5e7eb;
+    white-space: normal;
+}
+
+.ai-content p { margin-bottom: 1.25rem; }
+.ai-content strong { color: #fff; font-weight: 700; }
+
+.ai-content h3 {
+    font-family: 'Manrope';
+    color: #fff;
+    font-weight: 800;
+    margin: 1.5rem 0 0.5rem 0;
+}
+
+.ai-content ul {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.ai-content pre {
+    background: #0a0a0a;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    overflow-x: auto;
+}
+
+.ai-content code {
+    background: #1e1e1e;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.4rem;
+}
+
+/* Скроллбары */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+
+/* Состояние активного чата в меню */
+.chat-active {
+    background: rgba(255,255,255,0.1);
+    border-left: 4px solid #0054a6;
+    color: white !important;
+}
+
+/* Индикатор загрузки (пульсация) */
+.dot-pulse {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background-color: #0054a6;
+    animation: pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+}
+
+body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; }
+.font-headline { font-family: 'Manrope', sans-serif; }
+.ai-content { line-height: 1.6; font-size: 0.95rem; color: #e5e7eb; white-space: normal; }
+.ai-content p { margin-bottom: 1.25rem; }
+.ai-content strong { color: #fff; font-weight: 700; }
+.ai-content h3 { font-family: 'Manrope'; color: #fff; font-weight: 800; margin: 1.5rem 0 0.5rem 0; }
+.ai-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.25rem; }
+.ai-content pre { background: #0a0a0a; padding: 1rem; border-radius: 0.75rem; overflow-x: auto; margin-bottom: 1.25rem; }
+.ai-content code { background: #1e1e1e; padding: 0.2rem 0.4rem; border-radius: 0.4rem; font-family: monospace; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+.chat-active { background: rgba(255,255,255,0.1); border-left: 4px solid #0054a6; color: white !important; }
+.dot-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #0054a6; animation: pulse 1.2s infinite ease-in-out; }
+@keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }

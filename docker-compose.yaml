@@ -1,19 +1,28 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: pgvector/pgvector:pg15
-    container_name: my_pgvector_db
-    environment:
-      POSTGRES_DB: db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+#  postgres:
+#    image: pgvector/pgvector:pg16
+#    container_name: my_pgvector_db
+#    environment:
+#      POSTGRES_DB: db
+#      POSTGRES_USER: postgres
+#      POSTGRES_PASSWORD: 233122
+#
+#    ports:
+#      - "5438:5432"
+#    volumes:
+#      - postgres_data:/var/lib/postgresql/data
+#    restart: unless-stopped
 
+  app:
+    build: .
+    container_name: arc_demo
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

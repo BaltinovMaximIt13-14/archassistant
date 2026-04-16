@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.GetMapping;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -19,9 +21,10 @@ public class SimpleAIService {
 
     private static final int TOP_K = 5;
 
-    public String ask(String question) {
+    public Flux<String> askStream(String question) {
         try {
             List<String> chunks = searchService.findRelevantChunks(question, TOP_K);
+
             String prompt;
             if (chunks.isEmpty()) {
                 prompt = "Ответь на вопрос: " + question;
@@ -42,11 +45,31 @@ public class SimpleAIService {
             }
 
             ChatClient client = ChatClient.builder(chatModel).build();
-            String response = client.prompt().user(prompt).call().content();
-            return response != null ? response : "Нет ответа от модели";
+
+            return client.prompt()
+                    .user(prompt)
+                    .stream()
+                    .content();
         } catch (Exception e) {
-            log.error("AI ошибка: {}", e.getMessage());
-            return "Ошибка: " + e.getMessage();
+            log.error("AI ошибка: {}", e.getMessage(), e);
+            return Flux.just("Ошибка: " + e.getMessage());
         }
     }
+
+
+    public Flux<String> validateStream(String solution) {
+        try {
+            String prompt = """
+            Ты — эксперт по ИТ-архитектуре. Проверь следующее решение на соответствие архитектурным стандартам и лучшим практикам из своей базы знаний(там есть файлы с стандартами, по которым ты должен проверять решение).
+            Выдай отчёт по структуре: что соответствует, что нет, риски, твои рекомендации.
+            Решение:
+            %s
+            """.formatted(solution);
+            ChatClient client = ChatClient.builder(chatModel).build();
+            return client.prompt().user(prompt).stream().content();
+        } catch (Exception e) {
+            return Flux.just("Ошибка проверки: " + e.getMessage());
+        }
+    }
+
 }

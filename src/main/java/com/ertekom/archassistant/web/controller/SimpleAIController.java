@@ -2,11 +2,11 @@ package com.ertekom.archassistant.web.controller;
 
 import com.ertekom.archassistant.service.ai.SimpleAIService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
-import java.util.HashMap;
 import java.util.Map;
+
 
 @RestController
 @RequestMapping("/api/ai")
@@ -16,15 +16,14 @@ public class SimpleAIController {
 
     private final SimpleAIService simpleAIService;
 
-    @PostMapping("/generate")
-    public ResponseEntity<Map<String, String>> generate(@RequestBody Map<String, String> request) {
-        String message = request.get("message");
-        String responseText = simpleAIService.ask(message);
+    @GetMapping(value = "/stream", produces = "text/event-stream")
+    public Flux<Map<String, String>> stream(@RequestParam String message) {
+        return simpleAIService.askStream(message)
+                .map(text -> Map.of("content", text));
+    }
 
-        Map<String, String> response = new HashMap<>();
-        response.put("response", responseText == null ? "Нет ответа" : responseText);
-
-        // Убеждаемся, что JSON валидный – просто возвращаем Map
-        return ResponseEntity.ok(response);
+    @GetMapping("/validate")
+    public Flux<String> validateSolution(@RequestParam String solution) {
+        return simpleAIService.validateStream(solution);
     }
 }
