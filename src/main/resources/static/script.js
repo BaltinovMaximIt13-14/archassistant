@@ -104,8 +104,10 @@
         const section = document.getElementById('knowledge-section');
         const chevron = document.getElementById('knowledge-chevron');
         if (!section || !chevron) return;
-        section.classList.toggle('hidden');
-        chevron.style.transform = section.classList.contains('hidden') ? 'rotate(180deg)' : 'rotate(0deg)';
+
+        section.classList.toggle('collapsed');
+        const isCollapsed = section.classList.contains('collapsed');
+        chevron.style.transform = isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)';
     };
 
     // ---------- ЛОГИКА ЧАТОВ ----------
@@ -524,8 +526,35 @@
         });
     }
 
+    // ---------- СВОРАЧИВАНИЕ БОКОВОЙ ПАНЕЛИ ----------
+    const sidebar = document.querySelector('aside');
+    const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+    const sidebarToggleIcon = document.getElementById('sidebar-toggle-icon');
+
+    function initSidebarState() {
+        const savedState = localStorage.getItem('sidebar_collapsed');
+        if (savedState === 'true') {
+            sidebar.classList.add('sidebar-collapsed');
+            sidebarToggleIcon.textContent = 'menu';
+        } else {
+            sidebar.classList.remove('sidebar-collapsed');
+            sidebarToggleIcon.textContent = 'menu_open';
+        }
+    }
+
+    if (toggleSidebarBtn) {
+        toggleSidebarBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-collapsed');
+            const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
+            localStorage.setItem('sidebar_collapsed', isCollapsed);
+            sidebarToggleIcon.textContent = isCollapsed ? 'menu' : 'menu_open';
+        });
+    }
+
+
     // Инициализация
     initTheme();
     loadChats();
     loadKnowledgeSources();
+    initSidebarState();
 })();

@@ -177,3 +177,49 @@ html.dark .input-area-container {
 html:not(.dark) .input-area-container {
     background: transparent; /* или любой светлый фон, например #f9fafb */
 }
+
+/* Плавное сворачивание сайдбара */
+aside {
+    transition: width 0.3s ease, opacity 0.3s ease, padding 0.3s ease, border 0.3s ease;
+    overflow: hidden;
+    width: 320px; /* соответствует w-80 (20rem) */
+    min-width: 320px;
+    opacity: 1;
+}
+
+aside.sidebar-collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    opacity: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border-right-width: 0 !important;
+    pointer-events: none; /* чтобы нельзя было кликнуть в скрытую область */
+}
+
+/* Плавное изменение основной области */
+main {
+    transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+/* Плавное раскрытие секции знаний */
+#knowledge-section {
+    max-height: 500px;  /* достаточно для содержимого */
+    opacity: 1;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease;
+}
+
+#knowledge-section.collapsed {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Шеврон уже имеет transition в style.css */
+#knowledge-chevron {
+    transition: transform 0.3s;
+}
