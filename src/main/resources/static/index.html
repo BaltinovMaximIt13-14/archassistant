@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html class="dark" lang="ru"> <head>
+<html class="dark" lang="ru">
+<head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>ArchAssistant | ЭР-Телеком</title>
@@ -25,6 +26,8 @@
     </script>
 </head>
 <body class="flex h-screen overflow-hidden transition-colors duration-300">
+
+<!-- Сайдбар -->
 <aside class="w-80 bg-surface-container-lowest border-r border-outline-variant flex flex-col sidebar">
     <div class="p-6">
         <div class="flex items-center gap-3 mb-8">
@@ -38,21 +41,67 @@
         </button>
     </div>
     <nav id="chat-list" class="flex-1 overflow-y-auto px-4 space-y-1"></nav>
+
+    <!-- Сворачиваемая секция управления базой знаний -->
+    <div class="border-t border-outline-variant">
+        <div class="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-white/5 transition-all" onclick="toggleKnowledgeSection()">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-gray-400 text-sm">database</span>
+                <p class="text-[10px] text-gray-500 uppercase tracking-widest">База знаний (GitLab)</p>
+            </div>
+            <span id="knowledge-chevron" class="material-symbols-outlined text-gray-400 text-sm transition-transform">expand_less</span>
+        </div>
+        <div id="knowledge-section" class="px-4 pb-4 space-y-2">
+            <button onclick="openAddSourceModal()" class="w-full py-2 text-sm border border-outline-variant rounded-lg flex items-center justify-center gap-2 hover:bg-white/5 transition-all">
+                <span class="material-symbols-outlined text-base">cloud_upload</span>
+                Добавить источник
+            </button>
+            <button onclick="syncAllKnowledgeSources()" class="w-full py-2 text-sm bg-primary/20 text-primary rounded-lg flex items-center justify-center gap-2 hover:bg-primary/30 transition-all">
+                <span class="material-symbols-outlined text-base">sync</span>
+                Синхронизировать всё
+            </button>
+        </div>
+    </div>
+
     <div class="p-4 border-t border-outline-variant text-center footer-brand">
         <p class="text-[10px] text-gray-500 uppercase tracking-widest">ЭР-Телеком Холдинг</p>
     </div>
 </aside>
 
+<!-- Модальное окно добавления источника (без изменений) -->
+<div id="source-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
+    <div class="bg-surface-container-high rounded-2xl border border-outline-variant p-6 w-full max-w-md shadow-2xl">
+        <h2 class="text-xl font-bold mb-4">Добавить источник знаний</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">URL репозитория</label>
+                <input type="text" id="source-url" placeholder="https://gitlab.com/..." class="w-full bg-black/20 border border-outline-variant rounded-lg px-4 py-2 text-white focus:ring-primary">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Ветка</label>
+                <input type="text" id="source-branch" value="main" class="w-full bg-black/20 border border-outline-variant rounded-lg px-4 py-2 text-white focus:ring-primary">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Локальный путь (опционально)</label>
+                <input type="text" id="source-path" placeholder="/knowledge" class="w-full bg-black/20 border border-outline-variant rounded-lg px-4 py-2 text-white focus:ring-primary">
+            </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button onclick="closeSourceModal()" class="px-4 py-2 border border-outline-variant rounded-lg hover:bg-white/5">Отмена</button>
+            <button onclick="addKnowledgeSource()" class="px-4 py-2 bg-primary rounded-lg hover:bg-primary/80">Добавить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Основная область (без изменений) -->
 <main class="flex-1 flex flex-col bg-surface-container-lowest main-bg">
     <header class="h-16 border-b border-outline-variant flex items-center justify-between px-8 header-bg">
         <div id="active-chat-title" class="font-headline font-bold text-gray-400">Выберите проект в меню</div>
         <div class="flex items-center gap-4">
             <div id="loader" class="hidden dot-pulse"></div>
-
             <button id="theme-toggle" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/10 transition-all text-gray-400" title="Сменить тему">
                 <span class="material-symbols-outlined" id="theme-icon">light_mode</span>
             </button>
-
             <button id="stop-stream-btn" class="hidden w-8 h-8 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-red-400 transition-all" onclick="stopStreaming()">
                 <span class="material-symbols-outlined text-lg">stop</span>
             </button>
@@ -62,12 +111,26 @@
     <div id="chat-window" class="flex-1 overflow-y-auto p-8 space-y-8"></div>
 
     <div class="p-6 bg-gradient-to-t from-black via-black/80 to-transparent input-area-container">
+        <div id="drop-zone" class="hidden max-w-4xl mx-auto mb-3 p-6 border-2 border-dashed border-primary rounded-2xl bg-surface-container-high/80 text-center transition-all">
+            <span class="material-symbols-outlined text-4xl text-primary mb-2">cloud_upload</span>
+            <p class="text-sm text-gray-400">Перетащите файл сюда или <label class="text-primary cursor-pointer underline">выберите на компьютере<input type="file" id="file-input-drop" accept=".pdf,.docx,.doc,.txt,.md,.odt,.html,.xml,.json,.yaml,.yml,.java,.py,.js,.ts" style="display: none;"></label></p>
+        </div>
         <div class="max-w-4xl mx-auto bg-surface-container-high rounded-3xl border border-outline-variant p-2 shadow-2xl input-box">
             <div class="flex items-end gap-2 p-1">
-                <textarea id="user-input" rows="1" placeholder="Введите описание задачи..." class="flex-1 bg-transparent border-none text-white focus:ring-0 resize-none py-3 px-4 text-sm"></textarea>
-                <div class="flex gap-2 pb-1 pr-1">
-                    <button onclick="handleAction('/api/ai/validate', 'solution')" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-green-500 transition-all">
-                        <span class="material-symbols-outlined">fact_check</span>
+                <textarea id="user-input" rows="1" placeholder="Введите описание задачи или прикрепите файл..." class="flex-1 bg-transparent border-none text-white focus:ring-0 resize-none py-3 px-4 text-sm"></textarea>
+                <div class="flex gap-2 pb-1 pr-1 items-center">
+                    <label id="attach-btn" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-gray-400 cursor-pointer transition-all" title="Прикрепить файл">
+                        <span class="material-symbols-outlined">attach_file</span>
+                        <input type="file" id="file-input" accept=".pdf,.docx,.doc,.txt,.md,.odt,.html,.xml,.json,.yaml,.yml,.java,.py,.js,.ts" style="display: none;">
+                    </label>
+                    <div id="file-indicator" class="hidden px-3 py-1 bg-primary/20 text-primary text-xs rounded-full flex items-center gap-1 max-w-[150px]">
+                        <span class="material-symbols-outlined text-sm">description</span>
+                        <span id="file-name" class="truncate"></span>
+                        <button id="clear-file" class="ml-1 hover:text-red-400">&times;</button>
+                    </div>
+                    <button onclick="validateSolution()" class="px-4 h-10 rounded-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium transition-all active:scale-95">
+                        <span class="material-symbols-outlined text-lg">verified</span>
+                        Проверить
                     </button>
                     <button onclick="handleAction('/api/ai/stream', 'message')" class="w-10 h-10 bg-primary rounded-full flex items-center justify-center hover:scale-105 transition-all">
                         <span class="material-symbols-outlined text-white">send</span>
@@ -77,6 +140,7 @@
         </div>
     </div>
 </main>
+
 <script src="script.js"></script>
 </body>
 </html>

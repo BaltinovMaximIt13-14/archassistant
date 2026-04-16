@@ -132,3 +132,30 @@ html:not(.dark) .ai-content code { background: #e2e8f0; color: #000; }
 
 .dot-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #0054a6; animation: pulse 1.2s infinite ease-in-out; }
 @keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+
+/* Дополнительный стиль для кнопки "Проверить" (уже определён в Tailwind, но можно переопределить) */
+button.bg-green-600 {
+    transition: all 0.2s;
+}
+button.bg-green-600:hover {
+    background-color: #15803d;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+#knowledge-chevron {
+    transition: transform 0.3s;
+}
