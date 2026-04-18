@@ -161,9 +161,22 @@
         wrapper.className = `flex ${isAI ? 'justify-start' : 'justify-end'} mb-4`;
         const htmlContent = isAI ? marked.parse(content) : content;
 
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const fullDateTime = now.toLocaleString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
         wrapper.innerHTML = `
             <div class="max-w-[85%]">
-                ${isAI ? '<div class="text-primary font-bold text-[10px] mb-1 uppercase tracking-widest">ArchAssistant</div>' : ''}
+                <div class="flex items-center gap-2 mb-1 ${isAI ? '' : 'justify-end'}">
+                    ${isAI ? '<span class="text-primary font-bold text-[10px] uppercase tracking-widest">ArchAssistant</span>' : ''}
+                    <span class="text-[10px] text-gray-500 cursor-help" title="${fullDateTime}">${timeString}</span>
+                </div>
                 <div class="${isAI ? 'ai-content' : 'bg-primary p-4 rounded-2xl text-sm text-white border border-white/10 shadow-lg'}">
                     ${htmlContent}
                 </div>
@@ -223,66 +236,374 @@
         }
     };
 
+    // ---------- ПАРСИНГ ОТВЕТА AI (обновлённый) ----------
+    function extractViolations(text) {
+        const violations = [];
+
+        // Ищем секцию "Нарушения"
+        const sectionPatterns = [
+            /Нарушения?\s*\n([\s\S]*?)(?=\nРекомендации|\nПозитив|\nОценка|$)/i,
+            /(?:⚠️\s*)?Нарушения и проблемы?\s*\n([\s\S]*?)(?=\n[📋✅🟡]|\nРекомендации|\nПозитив|$)/i
+        ];
+
+        let violationsText = '';
+        for (const pattern of sectionPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                violationsText = match[1];
+                break;
+            }
+        }
+
+        if (!violationsText) {
+            console.warn('Секция нарушений не найдена');
+            return violations;
+        }
+
+        // Парсим нумерованные и ненумерованные нарушения
+        const lines = violationsText.split('\n');
+        let currentCategory = '';
+        let currentViolation = null;
+
+        for (let line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            // Определяем категорию (1. Несоответствие ГОСТ...)
+            const categoryMatch = trimmed.match(/^(\d+)\.\s*(.+?)(?::|$)/);
+            if (categoryMatch) {
+                // Сохраняем предыдущее нарушение
+                if (currentViolation) {
+                    violations.push(currentViolation);
+                }
+                currentCategory = categoryMatch[2].trim();
+                currentViolation = {
+                    code: `Н-${categoryMatch[1]}`,
+                    category: currentCategory,
+                    criteria: currentCategory,
+                    description: '',
+                    recommendation: ''
+                };
+                continue;
+            }
+
+            // Подпункты (начинаются с - или • или ❌ или ⚠️)
+            const subMatch = trimmed.match(/^[-•❌⚠️]\s*(.+)$/);
+            if (subMatch && currentViolation) {
+                const subText = subMatch[1].trim();
+                // Разделяем на описание и рекомендацию если есть двоеточие
+                const colonIndex = subText.indexOf(':');
+                if (colonIndex > 0) {
+                    const title = subText.substring(0, colonIndex).trim();
+                    const desc = subText.substring(colonIndex + 1).trim();
+                    currentViolation.description += (currentViolation.description ? '\n' : '') + `• ${title}: ${desc}`;
+                } else {
+                    currentViolation.description += (currentViolation.description ? '\n' : '') + `• ${subText}`;
+                }
+                continue;
+            }
+
+            // Обычный текст (продолжение описания)
+            if (currentViolation && !trimmed.match(/^\d+\./)) {
+                currentViolation.description += ' ' + trimmed;
+            }
+        }
+
+        // Добавляем последнее нарушение
+        if (currentViolation) {
+            violations.push(currentViolation);
+        }
+
+        // Для каждого нарушения ищем рекомендацию
+        violations.forEach(v => {
+            v.recommendation = extractRecommendationForViolation(text, v);
+            // Если описание слишком длинное для заголовка
+            if (v.description && v.description.length > 100) {
+                v.criteria = v.category;
+            } else {
+                v.criteria = v.description || v.category;
+            }
+        });
+
+        return violations;
+    }
+
+    function extractRecommendationForViolation(fullText, violation) {
+        // Ищем секцию с рекомендациями
+        const recSection = fullText.match(/Рекомендации?\s*\n([\s\S]*?)(?=\nПозитив|\nОценка|$)/i);
+        if (!recSection) return 'См. полный отчёт для рекомендаций';
+
+        const recContent = recSection[1];
+
+        // Ищем соответствующий пункт рекомендаций (1. Привести документацию...)
+        const recNumber = violation.code.replace('Н-', '');
+        const recPattern = new RegExp(`${recNumber}\\.\\s*([^\\n]+(?:\\n(?!\\d+\\.)[^\\n]+)*)`, 'i');
+        const recMatch = recContent.match(recPattern);
+
+        if (recMatch) {
+            // Извлекаем все подпункты
+            let recText = recMatch[1];
+            const subRecs = [];
+            const lines = recText.split('\n');
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.match(/^[-•]/)) {
+                    subRecs.push(trimmed.replace(/^[-•]\s*/, ''));
+                }
+            }
+
+            if (subRecs.length > 0) {
+                return subRecs.join('; ');
+            }
+            return recText.trim();
+        }
+
+        // Ищем по ключевым словам из категории
+        const keywords = violation.category.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+        const recLines = recContent.split('\n');
+
+        for (const line of recLines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.match(/^\d+\./)) continue;
+
+            const lineLower = trimmed.toLowerCase();
+            let matchCount = 0;
+            keywords.forEach(kw => {
+                if (lineLower.includes(kw)) matchCount++;
+            });
+
+            if (matchCount >= 2) {
+                return trimmed.replace(/^[-•]\s*/, '');
+            }
+        }
+
+        return 'Детальные рекомендации см. в разделе "Рекомендации" полного отчёта';
+    }
+
+    function extractPassed(text) {
+        const passed = [];
+
+        // Ищем секцию "Позитив"
+        const sectionPatterns = [
+            /Позитив(?:ные аспекты)?\s*\n([\s\S]*?)(?=\nОценка|\nЗаключение|$)/i,
+            /(?:✅\s*)?Позитив(?:ные моменты)?\s*\n([\s\S]*?)(?=\n[📊⚠️🟡]|\nОценка|$)/i
+        ];
+
+        let passedText = '';
+        for (const pattern of sectionPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                passedText = match[1];
+                break;
+            }
+        }
+
+        if (!passedText) {
+            // Ищем строки с ✅ по всему тексту
+            const positiveLines = text.match(/✅[^\n]+/g);
+            if (positiveLines) {
+                positiveLines.forEach(line => {
+                    const cleanLine = line.replace(/^✅\s*/, '').trim();
+                    if (cleanLine.length > 10) {
+                        // Разделяем на категорию и описание
+                        const colonIndex = cleanLine.indexOf(':');
+                        if (colonIndex > 0) {
+                            passed.push({
+                                category: cleanLine.substring(0, colonIndex).trim(),
+                                criteria: cleanLine.substring(0, 100),
+                                description: cleanLine.substring(colonIndex + 1).trim()
+                            });
+                        } else {
+                            passed.push({
+                                category: 'Позитивный момент',
+                                criteria: cleanLine.substring(0, 100),
+                                description: cleanLine
+                            });
+                        }
+                    }
+                });
+            }
+            return passed;
+        }
+
+        // Парсим строки
+        const lines = passedText.split('\n');
+        let currentItem = null;
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            // Новый пункт (начинается с ✅ или названия)
+            if (trimmed.includes('✅') || trimmed.match(/^[А-Я][а-я]+:/)) {
+                if (currentItem) {
+                    passed.push(currentItem);
+                }
+
+                const cleanLine = trimmed.replace(/^✅\s*/, '');
+                const colonIndex = cleanLine.indexOf(':');
+
+                if (colonIndex > 0) {
+                    currentItem = {
+                        category: cleanLine.substring(0, colonIndex).trim(),
+                        criteria: cleanLine.substring(0, 100),
+                        description: cleanLine.substring(colonIndex + 1).trim()
+                    };
+                } else {
+                    currentItem = {
+                        category: 'Позитивный момент',
+                        criteria: cleanLine.substring(0, 100),
+                        description: cleanLine
+                    };
+                }
+            } else if (currentItem) {
+                // Продолжение описания
+                currentItem.description += ' ' + trimmed;
+            }
+        }
+
+        if (currentItem) {
+            passed.push(currentItem);
+        }
+
+        return passed;
+    }
+
+    function extractMaturity(text) {
+        // Ищем уровень зрелости
+        const patterns = [
+            /Уровень зрелости:\s*(\d+)\s*(?:\([^)]+\))?\s*\n([\s\S]*?)(?=\n\n|$)/i,
+            /Оценка зрелости[^:]*:\s*(\d+)\s*(?:\([^)]+\))?/i,
+            /Уровень\s*(\d+)\s*\([^)]+\)/i
+        ];
+
+        for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (match) {
+                return {
+                    level: parseInt(match[1]),
+                    description: match[2] ? match[2].trim().substring(0, 200) : 'Уровень определён'
+                };
+            }
+        }
+
+        return { level: 2, description: 'Требуется оценка' };
+    }
+
+    function extractSummary(text) {
+        // Ищем итог
+        const patterns = [
+            /Итог\s*\n([^\n]+(?:\n[^\n]+){0,2})/i,
+            /🟡\s*Итог\s*\n([^\n]+)/i,
+            /##\s*Итог\s*\n([^\n]+)/i
+        ];
+
+        for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (match) {
+                return match[1].trim().replace(/\n/g, ' ');
+            }
+        }
+
+        // Первое предложение как итог
+        const firstLine = text.split('\n')[0];
+        if (firstLine && firstLine.length > 20) {
+            return firstLine;
+        }
+
+        return 'Проверка завершена';
+    }
+
+    function extractConclusion(text) {
+        // Ищем заключение или вывод
+        const patterns = [
+            /Заключение\s*\n([^\n]+(?:\n[^\n]+){0,3})/i,
+            /Вывод:?\s*\n([^\n]+)/i,
+            /Рекомендации по повышению зрелости[:\s]*\n([\s\S]*?)(?=\n\n|$)/i
+        ];
+
+        for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (match) {
+                return match[1].trim().replace(/\n/g, ' ');
+            }
+        }
+
+        return '';
+    }
+
     function parseAndDisplayValidationResults(responseText) {
         if (!violationsContent || !passedContent || !summaryContent) return;
 
-        // Очищаем контент
+        lastValidationResults = responseText;
+
         violationsContent.innerHTML = '';
         passedContent.innerHTML = '';
         summaryContent.innerHTML = '';
 
-        // Извлекаем данные из ответа AI
         const violations = extractViolations(responseText);
         const passed = extractPassed(responseText);
+        const maturity = extractMaturity(responseText);
+        const summary = extractSummary(responseText);
+        const conclusion = extractConclusion(responseText);
 
-        if (violations.length === 0 && passed.length === 0) {
-            violationsContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Нет данных для отображения</p>';
-            passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Нет данных для отображения</p>';
-            summaryContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Нет данных для отображения</p>';
+        if (violations.length === 0) {
+            violationsContent.innerHTML = '<p class="text-green-500 text-sm text-center py-4">✅ Нарушений не обнаружено</p>';
         } else {
             violations.forEach(v => violationsContent.appendChild(createViolationCard(v)));
-            passed.forEach(p => passedContent.appendChild(createPassedCard(p)));
-            summaryContent.innerHTML = createSummaryHTML(violations.length, passed.length);
         }
 
-        // Показываем кнопку открытия панели
-        if (showValidationBtn) showValidationBtn.classList.remove('hidden');
+        if (passed.length === 0) {
+            passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Позитивные моменты не выделены</p>';
+        } else {
+            passed.forEach(p => passedContent.appendChild(createPassedCard(p)));
+        }
 
-        // Автоматически открываем панель
+        summaryContent.innerHTML = createSummaryHTML(violations.length, passed.length, maturity, summary, conclusion);
+
+        if (showValidationBtn) showValidationBtn.classList.remove('hidden');
         showValidationPanel();
     }
 
     function createViolationCard(violation) {
         const card = document.createElement('div');
         card.className = 'criteria-card violation';
+
+        const codeDisplay = violation.code ? `<span class="font-mono text-xs text-primary mr-2">[${violation.code}]</span>` : '';
+
         card.innerHTML = `
             <div class="criteria-title">
                 <span class="material-symbols-outlined text-red-500">error</span>
+                ${codeDisplay}
                 <span>${escapeHtml(violation.criteria)}</span>
             </div>
             <div class="criteria-description">${escapeHtml(violation.description)}</div>
             <div class="recommendation">
-                <strong class="text-primary">Рекомендация:</strong><br>
-                ${escapeHtml(violation.recommendation)}
+                <strong class="text-primary flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">lightbulb</span>
+                    Рекомендация:
+                </strong>
+                <div class="mt-1">${escapeHtml(violation.recommendation)}</div>
             </div>
         `;
         return card;
     }
 
-    function createPassedCard(criteria) {
+    function createPassedCard(item) {
         const card = document.createElement('div');
         card.className = 'criteria-card passed';
         card.innerHTML = `
             <div class="criteria-title">
                 <span class="material-symbols-outlined text-green-500">check_circle</span>
-                <span>${escapeHtml(criteria.criteria)}</span>
+                <span class="text-xs text-gray-500">${escapeHtml(item.category)}</span>
             </div>
-            <div class="criteria-description">${escapeHtml(criteria.description)}</div>
+            <div class="criteria-description">${escapeHtml(item.description)}</div>
         `;
         return card;
     }
 
-    function createSummaryHTML(violationsCount, passedCount) {
+    function createSummaryHTML(violationsCount, passedCount, maturity, summary, conclusion) {
         const total = violationsCount + passedCount;
         const score = total > 0 ? Math.round((passedCount / total) * 100) : 0;
 
@@ -290,7 +611,7 @@
             <div class="space-y-4">
                 <div class="text-center py-4">
                     <div class="text-4xl font-bold ${score >= 70 ? 'text-green-500' : score >= 40 ? 'text-yellow-500' : 'text-red-500'}">${score}%</div>
-                    <div class="text-sm text-gray-500 mt-1">Общая оценка</div>
+                    <div class="text-sm text-gray-500 mt-1">${escapeHtml(summary)}</div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-green-500/10 p-4 rounded-xl text-center">
@@ -302,53 +623,23 @@
                         <div class="text-xs text-gray-500">Нарушений</div>
                     </div>
                 </div>
+                <div class="bg-primary/10 p-4 rounded-xl text-center">
+                    <div class="text-sm text-gray-400">Уровень зрелости</div>
+                    <div class="text-xl font-bold text-primary">${maturity.level}/5</div>
+                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(maturity.description)}</div>
+                </div>
+                ${conclusion ? `
+                <div class="bg-surface-container-high/50 p-4 rounded-xl border border-outline-variant">
+                    <div class="text-xs text-gray-400 mb-1">Заключение</div>
+                    <div class="text-sm">${escapeHtml(conclusion)}</div>
+                </div>
+                ` : ''}
             </div>
         `;
     }
 
-    function extractViolations(text) {
-        // Парсинг ответа AI (адаптируйте под формат)
-        const violations = [];
-
-        // Ищем секцию с нарушениями в Markdown
-        const violationMatch = text.match(/##?\s*Нарушения?|##?\s*Несоответствия?|##?\s*Проблемы?/i);
-        if (violationMatch) {
-            // Упрощённый парсинг — можно улучшить
-            violations.push({
-                criteria: "Обнаружено несоответствие",
-                description: "Подробности в отчёте AI",
-                recommendation: "Следуйте рекомендациям в полном ответе ассистента"
-            });
-        }
-
-        // Если ничего не нашли, возвращаем пример (для демонстрации)
-        if (violations.length === 0) {
-            violations.push({
-                criteria: "Проверка выполнена",
-                description: "Детальный анализ в ответе ассистента",
-                recommendation: "Ознакомьтесь с полным отчётом в чате"
-            });
-        }
-
-        return violations;
-    }
-
-    function extractPassed(text) {
-        const passed = [];
-
-        // Ищем секцию с пройденными критериями
-        const passedMatch = text.match(/##?\s*Пройдено|##?\s*Соответствия?|##?\s*Позитивные моменты/i);
-        if (passedMatch) {
-            passed.push({
-                criteria: "Критерии пройдены",
-                description: "Подробности в отчёте AI"
-            });
-        }
-
-        return passed;
-    }
-
     function escapeHtml(text) {
+        if (!text) return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
@@ -453,7 +744,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chatId: currentChatId, role: 'assistant', content: fullText })
                 });
-                // Парсим и показываем результаты
                 parseAndDisplayValidationResults(fullText);
             } else {
                 aiContainer.innerHTML = marked.parse('⚠️ **Ошибка:** не удалось получить ответ от сервера.');

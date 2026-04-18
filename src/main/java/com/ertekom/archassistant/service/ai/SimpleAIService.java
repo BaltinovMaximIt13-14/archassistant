@@ -25,11 +25,10 @@ public class SimpleAIService {
     private final OllamaChatModel chatModel;
     private final KnowledgeSearchService searchService;
     private final DocumentRepository documentRepository;
-    private final JdbcTemplate jdbcTemplate;  // если нет – можно использовать MessageService
+    private final JdbcTemplate jdbcTemplate;
 
     private static final int TOP_K = 5;
 
-    // Вспомогательный метод для получения истории чата
     private List<Map<String, String>> getChatHistory(UUID chatId) {
         if (chatId == null) return new ArrayList<>();
         try {
