@@ -20,9 +20,15 @@
     const fileIndicator = document.getElementById('file-indicator');
     const fileNameSpan = document.getElementById('file-name');
     const clearFileBtn = document.getElementById('clear-file');
+    const validationPanel = document.getElementById('validation-panel');
+    const showValidationBtn = document.getElementById('show-validation-btn');
+    const violationsContent = document.getElementById('violations-content');
+    const passedContent = document.getElementById('passed-content');
+    const summaryContent = document.getElementById('summary-content');
 
     let uploadedFile = null;
     let uploadedDocumentId = null;
+    let lastValidationResults = null;
 
     marked.setOptions({ breaks: true, gfm: true });
 
@@ -185,6 +191,169 @@
         clearAttachedFile();
     };
 
+    // ---------- ПАНЕЛЬ РЕЗУЛЬТАТОВ ----------
+    window.switchValidationTab = function(tab) {
+        const tabs = ['violations', 'passed', 'summary'];
+        tabs.forEach(t => {
+            const tabBtn = document.getElementById(`tab-${t}`);
+            const content = document.getElementById(`${t}-content`);
+            if (t === tab) {
+                tabBtn.classList.add('border-primary', 'text-primary');
+                tabBtn.classList.remove('text-gray-500', 'hover:text-gray-300');
+                content.classList.remove('hidden');
+            } else {
+                tabBtn.classList.remove('border-primary', 'text-primary');
+                tabBtn.classList.add('text-gray-500', 'hover:text-gray-300');
+                content.classList.add('hidden');
+            }
+        });
+    };
+
+    window.showValidationPanel = function() {
+        if (validationPanel) {
+            validationPanel.classList.remove('hidden');
+            if (showValidationBtn) showValidationBtn.classList.add('hidden');
+        }
+    };
+
+    window.closeValidationPanel = function() {
+        if (validationPanel) {
+            validationPanel.classList.add('hidden');
+            if (showValidationBtn) showValidationBtn.classList.remove('hidden');
+        }
+    };
+
+    function parseAndDisplayValidationResults(responseText) {
+        if (!violationsContent || !passedContent || !summaryContent) return;
+
+        // Очищаем контент
+        violationsContent.innerHTML = '';
+        passedContent.innerHTML = '';
+        summaryContent.innerHTML = '';
+
+        // Извлекаем данные из ответа AI
+        const violations = extractViolations(responseText);
+        const passed = extractPassed(responseText);
+
+        if (violations.length === 0 && passed.length === 0) {
+            violationsContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Нет данных для отображения</p>';
+            passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Нет данных для отображения</p>';
+            summaryContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Нет данных для отображения</p>';
+        } else {
+            violations.forEach(v => violationsContent.appendChild(createViolationCard(v)));
+            passed.forEach(p => passedContent.appendChild(createPassedCard(p)));
+            summaryContent.innerHTML = createSummaryHTML(violations.length, passed.length);
+        }
+
+        // Показываем кнопку открытия панели
+        if (showValidationBtn) showValidationBtn.classList.remove('hidden');
+
+        // Автоматически открываем панель
+        showValidationPanel();
+    }
+
+    function createViolationCard(violation) {
+        const card = document.createElement('div');
+        card.className = 'criteria-card violation';
+        card.innerHTML = `
+            <div class="criteria-title">
+                <span class="material-symbols-outlined text-red-500">error</span>
+                <span>${escapeHtml(violation.criteria)}</span>
+            </div>
+            <div class="criteria-description">${escapeHtml(violation.description)}</div>
+            <div class="recommendation">
+                <strong class="text-primary">Рекомендация:</strong><br>
+                ${escapeHtml(violation.recommendation)}
+            </div>
+        `;
+        return card;
+    }
+
+    function createPassedCard(criteria) {
+        const card = document.createElement('div');
+        card.className = 'criteria-card passed';
+        card.innerHTML = `
+            <div class="criteria-title">
+                <span class="material-symbols-outlined text-green-500">check_circle</span>
+                <span>${escapeHtml(criteria.criteria)}</span>
+            </div>
+            <div class="criteria-description">${escapeHtml(criteria.description)}</div>
+        `;
+        return card;
+    }
+
+    function createSummaryHTML(violationsCount, passedCount) {
+        const total = violationsCount + passedCount;
+        const score = total > 0 ? Math.round((passedCount / total) * 100) : 0;
+
+        return `
+            <div class="space-y-4">
+                <div class="text-center py-4">
+                    <div class="text-4xl font-bold ${score >= 70 ? 'text-green-500' : score >= 40 ? 'text-yellow-500' : 'text-red-500'}">${score}%</div>
+                    <div class="text-sm text-gray-500 mt-1">Общая оценка</div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-green-500/10 p-4 rounded-xl text-center">
+                        <div class="text-2xl font-bold text-green-500">${passedCount}</div>
+                        <div class="text-xs text-gray-500">Пройдено</div>
+                    </div>
+                    <div class="bg-red-500/10 p-4 rounded-xl text-center">
+                        <div class="text-2xl font-bold text-red-500">${violationsCount}</div>
+                        <div class="text-xs text-gray-500">Нарушений</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function extractViolations(text) {
+        // Парсинг ответа AI (адаптируйте под формат)
+        const violations = [];
+
+        // Ищем секцию с нарушениями в Markdown
+        const violationMatch = text.match(/##?\s*Нарушения?|##?\s*Несоответствия?|##?\s*Проблемы?/i);
+        if (violationMatch) {
+            // Упрощённый парсинг — можно улучшить
+            violations.push({
+                criteria: "Обнаружено несоответствие",
+                description: "Подробности в отчёте AI",
+                recommendation: "Следуйте рекомендациям в полном ответе ассистента"
+            });
+        }
+
+        // Если ничего не нашли, возвращаем пример (для демонстрации)
+        if (violations.length === 0) {
+            violations.push({
+                criteria: "Проверка выполнена",
+                description: "Детальный анализ в ответе ассистента",
+                recommendation: "Ознакомьтесь с полным отчётом в чате"
+            });
+        }
+
+        return violations;
+    }
+
+    function extractPassed(text) {
+        const passed = [];
+
+        // Ищем секцию с пройденными критериями
+        const passedMatch = text.match(/##?\s*Пройдено|##?\s*Соответствия?|##?\s*Позитивные моменты/i);
+        if (passedMatch) {
+            passed.push({
+                criteria: "Критерии пройдены",
+                description: "Подробности в отчёте AI"
+            });
+        }
+
+        return passed;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     // ---------- ПРОВЕРКА РЕШЕНИЯ ----------
     window.validateSolution = async function() {
         const comment = inputField?.value.trim() || '';
@@ -284,6 +453,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chatId: currentChatId, role: 'assistant', content: fullText })
                 });
+                // Парсим и показываем результаты
+                parseAndDisplayValidationResults(fullText);
             } else {
                 aiContainer.innerHTML = marked.parse('⚠️ **Ошибка:** не удалось получить ответ от сервера.');
             }
@@ -400,12 +571,6 @@
             </div>
         `;
         }).join('');
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
 
     function getLocalNamesMap() {
@@ -550,7 +715,6 @@
             sidebarToggleIcon.textContent = isCollapsed ? 'menu' : 'menu_open';
         });
     }
-
 
     // Инициализация
     initTheme();

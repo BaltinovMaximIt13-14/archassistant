@@ -112,9 +112,13 @@
             </button>
             <div id="active-chat-title" class="font-headline font-bold text-gray-400">Выберите чат в меню</div>
         </div>
-        <!-- Правая часть шапки (без изменений) -->
+        <!-- Правая часть шапки -->
         <div class="flex items-center gap-4">
             <div id="loader" class="hidden dot-pulse"></div>
+            <!-- Кнопка показа панели результатов -->
+            <button id="show-validation-btn" onclick="showValidationPanel()" class="hidden w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-primary transition-all" title="Показать результаты проверки">
+                <span class="material-symbols-outlined">verified</span>
+            </button>
             <button id="theme-toggle" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/10 transition-all text-gray-400" title="Сменить тему">
                 <span class="material-symbols-outlined" id="theme-icon">light_mode</span>
             </button>
@@ -156,6 +160,39 @@
         </div>
     </div>
 </main>
+
+<!-- Панель результатов проверки -->
+<div id="validation-panel" class="w-96 bg-surface-container-lowest border-l border-outline-variant flex flex-col hidden transition-all duration-300">
+    <div class="p-4 border-b border-outline-variant flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">verified</span>
+            <h3 class="font-bold text-sm uppercase tracking-wide">Результаты проверки</h3>
+        </div>
+        <button onclick="closeValidationPanel()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 transition-all">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4">
+        <!-- Вкладки -->
+        <div class="flex gap-2 mb-4 border-b border-outline-variant">
+            <button id="tab-violations" onclick="switchValidationTab('violations')" class="px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary -mb-px">Нарушения</button>
+            <button id="tab-passed" onclick="switchValidationTab('passed')" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-300 -mb-px">Пройдено</button>
+            <button id="tab-summary" onclick="switchValidationTab('summary')" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-300 -mb-px">Сводка</button>
+        </div>
+
+        <!-- Контент вкладок -->
+        <div id="violations-content" class="space-y-3">
+            <p class="text-gray-500 text-sm text-center py-4">Нет данных проверки</p>
+        </div>
+        <div id="passed-content" class="space-y-3 hidden">
+            <p class="text-gray-500 text-sm text-center py-4">Нет данных проверки</p>
+        </div>
+        <div id="summary-content" class="space-y-3 hidden">
+            <p class="text-gray-500 text-sm text-center py-4">Нет данных проверки</p>
+        </div>
+    </div>
+</div>
 
 <script src="script.js"></script>
 </body>

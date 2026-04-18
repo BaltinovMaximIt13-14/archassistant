@@ -223,3 +223,66 @@ main {
 #knowledge-chevron {
     transition: transform 0.3s;
 }
+
+
+/* Карточки критериев */
+.criteria-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.2s;
+}
+
+.criteria-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.criteria-card.violation {
+    border-left: 4px solid #ef4444;
+}
+
+.criteria-card.passed {
+    border-left: 4px solid #10b981;
+}
+
+.criteria-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.criteria-description {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    margin-bottom: 12px;
+}
+
+.recommendation {
+    background: rgba(0, 84, 166, 0.1);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    border: 1px solid rgba(0, 84, 166, 0.3);
+}
+
+/* Светлая тема */
+html:not(.dark) .criteria-card {
+    background: #ffffff;
+    border-color: #e5e7eb;
+}
+
+html:not(.dark) .criteria-card:hover {
+    background: #f9fafb;
+}
+
+html:not(.dark) .criteria-description {
+    color: #6b7280;
+}
+
+html:not(.dark) .recommendation {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
