@@ -147,7 +147,18 @@
         try {
             const res = await fetch(`/api/messages/chat/${id}`);
             const messages = await res.json();
-            messages.forEach(msg => appendMessage(msg.role, msg.content));
+            let lastValidationReport = null;
+            messages.forEach(msg => {
+                appendMessage(msg.role, msg.content);
+                if (msg.role === 'assistant' && looksLikeValidationReport(msg.content)) {
+                    lastValidationReport = msg.content;
+                }
+            });
+            if (lastValidationReport) {
+                parseAndDisplayValidationResults(lastValidationReport, { openPanel: false });
+            } else {
+                resetValidationPanel();
+            }
         } catch (e) {
             console.error('Ошибка загрузки сообщений:', e);
         }
@@ -210,6 +221,7 @@
         tabs.forEach(t => {
             const tabBtn = document.getElementById(`tab-${t}`);
             const content = document.getElementById(`${t}-content`);
+            if (!tabBtn || !content) return;
             if (t === tab) {
                 tabBtn.classList.add('border-primary', 'text-primary');
                 tabBtn.classList.remove('text-gray-500', 'hover:text-gray-300');
@@ -236,334 +248,490 @@
         }
     };
 
-    // ---------- ПАРСИНГ ОТВЕТА AI (обновлённый) ----------
-    function extractViolations(text) {
-        const violations = [];
+    // ---------- ПАРСИНГ ОТВЕТА AI НА КЛИЕНТЕ ----------
+    const EMPTY_VALIDATION_HTML = '<p class="text-gray-500 text-sm text-center py-4">Нет данных проверки</p>';
 
-        // Ищем секцию "Нарушения"
-        const sectionPatterns = [
-            /Нарушения?\s*\n([\s\S]*?)(?=\nРекомендации|\nПозитив|\nОценка|$)/i,
-            /(?:⚠️\s*)?Нарушения и проблемы?\s*\n([\s\S]*?)(?=\n[📋✅🟡]|\nРекомендации|\nПозитив|$)/i
-        ];
+    const SECTION_ALIASES = {
+        summary: ['итог', 'сводка', 'результат проверки', 'общий результат', 'общая оценка', 'вердикт'],
+        violations: ['нарушения', 'нарушение', 'несоответствия', 'несоответствие', 'проблемы', 'замечания', 'риски', 'ошибки'],
+        recommendations: ['рекомендации', 'рекомендация', 'что исправить', 'план исправлений', 'меры'],
+        passed: ['пройдено', 'пройденные проверки', 'пройденные тесты', 'успешные проверки', 'позитив', 'положительные моменты', 'соответствует', 'выполнено'],
+        maturity: ['оценка зрелости', 'уровень зрелости', 'зрелость', 'оценка']
+    };
 
-        let violationsText = '';
-        for (const pattern of sectionPatterns) {
-            const match = text.match(pattern);
-            if (match) {
-                violationsText = match[1];
-                break;
+    const NO_VIOLATIONS_RE = /(нарушени[йя]\s+(?:не\s+)?(?:обнаружено|найдено|выявлено)|нет\s+нарушений|нарушения\s+отсутствуют|несоответствия\s+не\s+выявлены)/i;
+    const NO_PASSED_RE = /(пройденн(?:ые|ых)\s+(?:проверки|тесты)\s+(?:не\s+)?(?:выделены|найдены|обнаружены)|нет\s+пройденных|позитивные\s+моменты\s+не\s+выделены)/i;
+
+    function normalizeReportText(text) {
+        return (text || '')
+            .replace(/\r\n?/g, '\n')
+            .replace(/\u00a0/g, ' ')
+            .replace(/[ \t]+$/gm, '')
+            .trim();
+    }
+
+    function stripMarkdownSyntax(value) {
+        return (value || '')
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/`{1,3}/g, '')
+            .replace(/\*\*/g, '')
+            .replace(/__/g, '')
+            .replace(/~~/g, '')
+            .replace(/^\s{0,3}#{1,6}\s*/, '')
+            .replace(/^\s*>\s*/, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function stripLeadingIcon(value) {
+        return value
+            .replace(/^[^A-Za-zА-Яа-яЁё0-9]+/, '')
+            .trim();
+    }
+
+    function isListItem(line) {
+        return /^\s*(?:[-*•]\s+|[✅❌⚠️]\s*|\d+[\).]\s+|\[[^\]]+\]\s*)/.test(line);
+    }
+
+    function getSectionKey(title) {
+        const normalized = stripLeadingIcon(stripMarkdownSyntax(title))
+            .replace(/^\d+[\).]\s*/, '')
+            .toLowerCase()
+            .replace(/[:：]\s*$/, '');
+        if (!normalized || normalized.length > 90) return null;
+
+        for (const [key, aliases] of Object.entries(SECTION_ALIASES)) {
+            if (aliases.some(alias => normalized === alias || normalized.startsWith(`${alias}:`) || normalized.includes(alias))) {
+                return key;
             }
         }
+        return null;
+    }
 
-        if (!violationsText) {
-            console.warn('Секция нарушений не найдена');
-            return violations;
+    function parseSectionHeading(line) {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        const withoutHeadingMarker = stripMarkdownSyntax(trimmed);
+        const numberedHeadingText = withoutHeadingMarker.replace(/^\d+[\).]\s*/, '');
+        const inlineMatch = withoutHeadingMarker.match(/^(.{3,70}?):\s*(.*)$/);
+        const title = inlineMatch ? inlineMatch[1] : numberedHeadingText;
+        const key = getSectionKey(title);
+
+        if (!key) return null;
+        const isNumberedHeading = /^\d+[\).]\s+/.test(withoutHeadingMarker) && numberedHeadingText.length <= 70 && getSectionKey(numberedHeadingText);
+        if (isListItem(trimmed) && !isNumberedHeading) return null;
+
+        const looksLikeHeading = /^#{1,6}\s/.test(trimmed) || /\*\*.+\*\*/.test(trimmed) || inlineMatch || withoutHeadingMarker.length <= 70 || isNumberedHeading;
+        if (!looksLikeHeading) return null;
+
+        return {
+            key,
+            rest: inlineMatch ? inlineMatch[2].trim() : ''
+        };
+    }
+
+    function splitReportIntoSections(text) {
+        const sections = {
+            preamble: [],
+            summary: [],
+            violations: [],
+            recommendations: [],
+            passed: [],
+            maturity: []
+        };
+        let current = 'preamble';
+
+        normalizeReportText(text).split('\n').forEach(line => {
+            const heading = parseSectionHeading(line);
+            if (heading) {
+                current = heading.key;
+                if (heading.rest) sections[current].push(heading.rest);
+                return;
+            }
+            sections[current].push(line);
+        });
+
+        return sections;
+    }
+
+    function cleanItemText(line) {
+        return stripMarkdownSyntax(line)
+            .replace(/^\s*(?:[-*•]\s*)/, '')
+            .replace(/^[✅❌⚠️]\s*/, '')
+            .replace(/^\s*\[([^\]]+)\]\s*/, '$1 ')
+            .trim();
+    }
+
+    function stripNumberPrefix(line) {
+        const match = line.match(/^(\d+)[\).]\s*(.*)$/);
+        return match ? { number: match[1], text: match[2].trim() } : { number: null, text: line };
+    }
+
+    function splitTitleAndDescription(text, defaultCategory) {
+        const normalized = text.trim();
+        const colonIndex = normalized.indexOf(':');
+        if (colonIndex > 0 && colonIndex <= 90) {
+            return {
+                category: normalized.slice(0, colonIndex).trim(),
+                description: normalized.slice(colonIndex + 1).trim() || normalized.slice(0, colonIndex).trim()
+            };
         }
 
-        // Парсим нумерованные и ненумерованные нарушения
-        const lines = violationsText.split('\n');
-        let currentCategory = '';
-        let currentViolation = null;
-
-        for (let line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-
-            // Определяем категорию (1. Несоответствие ГОСТ...)
-            const categoryMatch = trimmed.match(/^(\d+)\.\s*(.+?)(?::|$)/);
-            if (categoryMatch) {
-                // Сохраняем предыдущее нарушение
-                if (currentViolation) {
-                    violations.push(currentViolation);
-                }
-                currentCategory = categoryMatch[2].trim();
-                currentViolation = {
-                    code: `Н-${categoryMatch[1]}`,
-                    category: currentCategory,
-                    criteria: currentCategory,
-                    description: '',
-                    recommendation: ''
-                };
-                continue;
-            }
-
-            // Подпункты (начинаются с - или • или ❌ или ⚠️)
-            const subMatch = trimmed.match(/^[-•❌⚠️]\s*(.+)$/);
-            if (subMatch && currentViolation) {
-                const subText = subMatch[1].trim();
-                // Разделяем на описание и рекомендацию если есть двоеточие
-                const colonIndex = subText.indexOf(':');
-                if (colonIndex > 0) {
-                    const title = subText.substring(0, colonIndex).trim();
-                    const desc = subText.substring(colonIndex + 1).trim();
-                    currentViolation.description += (currentViolation.description ? '\n' : '') + `• ${title}: ${desc}`;
-                } else {
-                    currentViolation.description += (currentViolation.description ? '\n' : '') + `• ${subText}`;
-                }
-                continue;
-            }
-
-            // Обычный текст (продолжение описания)
-            if (currentViolation && !trimmed.match(/^\d+\./)) {
-                currentViolation.description += ' ' + trimmed;
-            }
+        const dashMatch = normalized.match(/^(.{3,90}?)\s+[—-]\s+(.+)$/);
+        if (dashMatch) {
+            return {
+                category: dashMatch[1].trim(),
+                description: dashMatch[2].trim()
+            };
         }
 
-        // Добавляем последнее нарушение
-        if (currentViolation) {
-            violations.push(currentViolation);
+        return {
+            category: defaultCategory,
+            description: normalized
+        };
+    }
+
+    function isDetailLabel(line) {
+        return /^(описание|проблема|причина|критерий|стандарт|требование|влияние|риск|детали)\s*:/i.test(line);
+    }
+
+    function extractDetailText(line) {
+        return line.replace(/^[^:]+:\s*/i, '').trim();
+    }
+
+    function isRecommendationLabel(line) {
+        return /^(рекомендац(?:ия|ии)|исправить|что сделать|решение|как исправить)\s*:/i.test(line);
+    }
+
+    function buildValidationItem(rawLine, type, index, markerType) {
+        let cleanLine = cleanItemText(rawLine);
+        const numbered = stripNumberPrefix(cleanLine);
+        cleanLine = numbered.text;
+
+        const codeMatch = cleanLine.match(/^((?:Н|П|T|TEST|STD|REQ|CR)[-\s]?\d+)\s*[:.)-]?\s*(.*)$/i);
+        const code = codeMatch ? codeMatch[1].replace(/\s+/g, '-').toUpperCase() : null;
+        if (codeMatch) cleanLine = codeMatch[2].trim() || codeMatch[1];
+
+        const defaultCategory = type === 'violation' ? 'Нарушение стандарта' : 'Пройденная проверка';
+        const split = splitTitleAndDescription(cleanLine, defaultCategory);
+        const fallbackNumber = numbered.number || String(index + 1);
+        const criteria = split.category === defaultCategory && split.description.length <= 120
+            ? split.description
+            : split.category;
+
+        return {
+            code: code || (type === 'violation' ? `Н-${fallbackNumber}` : `П-${fallbackNumber}`),
+            category: split.category || defaultCategory,
+            criteria: criteria || defaultCategory,
+            description: split.description || cleanLine || defaultCategory,
+            recommendation: '',
+            markerType
+        };
+    }
+
+    function appendItemDetail(item, detail) {
+        if (!detail) return;
+        item.description = item.description
+            ? `${item.description}\n${detail}`
+            : detail;
+    }
+
+    function parseTableItems(text, type) {
+        const items = [];
+        const lines = normalizeReportText(text).split('\n').filter(line => line.includes('|'));
+
+        lines.forEach(line => {
+            const cells = line.split('|').map(cell => stripMarkdownSyntax(cell)).filter(Boolean);
+            if (cells.length < 2 || cells.every(cell => /^[-:]+$/.test(cell))) return;
+
+            const rowText = cells.join(' ');
+            const isViolation = /❌|⚠️|наруш|не\s+соответ|fail|failed|ошибка|проблем/i.test(rowText);
+            const isPassed = /✅|пройден|соответствует|pass|passed|ok|выполн/i.test(rowText) && !isViolation;
+
+            if ((type === 'violation' && !isViolation) || (type === 'passed' && !isPassed)) return;
+
+            const usefulCells = cells.filter(cell => !/^(статус|результат|✅|❌|⚠️|пройдено|нарушение)$/i.test(cell));
+            const category = usefulCells[0] || (type === 'violation' ? 'Нарушение стандарта' : 'Пройденная проверка');
+            const description = usefulCells.slice(1).join(' · ') || rowText;
+
+            items.push({
+                code: `${type === 'violation' ? 'Н' : 'П'}-${items.length + 1}`,
+                category,
+                criteria: category,
+                description,
+                recommendation: ''
+            });
+        });
+
+        return items;
+    }
+
+    function parseListItems(sectionText, type) {
+        const items = [];
+        const tableItems = parseTableItems(sectionText, type);
+        const lines = normalizeReportText(sectionText).split('\n');
+        let current = null;
+
+        function pushCurrent() {
+            if (!current) return;
+            current.description = stripMarkdownSyntax(current.description);
+            current.recommendation = stripMarkdownSyntax(current.recommendation);
+            if (current.description.length > 0) items.push(current);
+            current = null;
         }
 
-        // Для каждого нарушения ищем рекомендацию
-        violations.forEach(v => {
-            v.recommendation = extractRecommendationForViolation(text, v);
-            // Если описание слишком длинное для заголовка
-            if (v.description && v.description.length > 100) {
-                v.criteria = v.category;
+        lines.forEach(rawLine => {
+            const trimmed = rawLine.trim();
+            if (!trimmed || /^\|?[-:\s|]+\|?$/.test(trimmed)) return;
+
+            const cleanLine = cleanItemText(trimmed);
+            if (!cleanLine || NO_VIOLATIONS_RE.test(cleanLine) || NO_PASSED_RE.test(cleanLine)) return;
+
+            if (current && isRecommendationLabel(cleanLine)) {
+                current.recommendation = [current.recommendation, extractDetailText(cleanLine)].filter(Boolean).join(' ');
+                return;
+            }
+
+            if (current && isDetailLabel(cleanLine)) {
+                appendItemDetail(current, extractDetailText(cleanLine));
+                return;
+            }
+
+            const markerType = /^\s*\d+[\).]\s+/.test(trimmed) ? 'number' : (isListItem(trimmed) ? 'bullet' : 'plain');
+            const startsNewItem = markerType === 'number' || !current || (markerType === 'bullet' && current.markerType !== 'number');
+
+            if (startsNewItem) {
+                pushCurrent();
+                current = buildValidationItem(trimmed, type, items.length, markerType);
+                return;
+            }
+
+            appendItemDetail(current, cleanLine);
+        });
+
+        pushCurrent();
+        return [...tableItems, ...items].filter((item, index, all) => {
+            const fingerprint = `${item.category}|${item.description}`.toLowerCase();
+            return all.findIndex(other => `${other.category}|${other.description}`.toLowerCase() === fingerprint) === index;
+        });
+    }
+
+    function parseRecommendations(sectionText) {
+        const recommendations = new Map();
+        let common = '';
+
+        normalizeReportText(sectionText).split('\n').forEach(line => {
+            const cleaned = cleanItemText(line);
+            if (!cleaned) return;
+
+            const numbered = stripNumberPrefix(cleaned);
+            if (numbered.number) {
+                recommendations.set(numbered.number, numbered.text);
             } else {
-                v.criteria = v.description || v.category;
+                common = [common, numbered.text].filter(Boolean).join(' ');
             }
         });
 
-        return violations;
+        return { byNumber: recommendations, common };
     }
 
-    function extractRecommendationForViolation(fullText, violation) {
-        // Ищем секцию с рекомендациями
-        const recSection = fullText.match(/Рекомендации?\s*\n([\s\S]*?)(?=\nПозитив|\nОценка|$)/i);
-        if (!recSection) return 'См. полный отчёт для рекомендаций';
+    function applyRecommendations(violations, recommendationSection) {
+        const recommendations = parseRecommendations(recommendationSection);
 
-        const recContent = recSection[1];
+        violations.forEach(violation => {
+            if (violation.recommendation) return;
 
-        // Ищем соответствующий пункт рекомендаций (1. Привести документацию...)
-        const recNumber = violation.code.replace('Н-', '');
-        const recPattern = new RegExp(`${recNumber}\\.\\s*([^\\n]+(?:\\n(?!\\d+\\.)[^\\n]+)*)`, 'i');
-        const recMatch = recContent.match(recPattern);
+            const number = (violation.code || '').match(/\d+/)?.[0];
+            if (number && recommendations.byNumber.has(number)) {
+                violation.recommendation = recommendations.byNumber.get(number);
+                return;
+            }
 
-        if (recMatch) {
-            // Извлекаем все подпункты
-            let recText = recMatch[1];
-            const subRecs = [];
-            const lines = recText.split('\n');
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (trimmed.match(/^[-•]/)) {
-                    subRecs.push(trimmed.replace(/^[-•]\s*/, ''));
+            const keywords = violation.category.toLowerCase().split(/\s+/).filter(word => word.length > 4);
+            for (const recommendation of recommendations.byNumber.values()) {
+                const lower = recommendation.toLowerCase();
+                const matches = keywords.filter(keyword => lower.includes(keyword)).length;
+                if (matches >= 2) {
+                    violation.recommendation = recommendation;
+                    return;
                 }
             }
 
-            if (subRecs.length > 0) {
-                return subRecs.join('; ');
-            }
-            return recText.trim();
-        }
-
-        // Ищем по ключевым словам из категории
-        const keywords = violation.category.toLowerCase().split(/\s+/).filter(w => w.length > 4);
-        const recLines = recContent.split('\n');
-
-        for (const line of recLines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.match(/^\d+\./)) continue;
-
-            const lineLower = trimmed.toLowerCase();
-            let matchCount = 0;
-            keywords.forEach(kw => {
-                if (lineLower.includes(kw)) matchCount++;
-            });
-
-            if (matchCount >= 2) {
-                return trimmed.replace(/^[-•]\s*/, '');
-            }
-        }
-
-        return 'Детальные рекомендации см. в разделе "Рекомендации" полного отчёта';
+            violation.recommendation = recommendations.common || 'См. полный отчёт для рекомендаций';
+        });
     }
 
-    function extractPassed(text) {
-        const passed = [];
+    function extractValidationReport(text) {
+        const normalizedText = normalizeReportText(text);
+        const sections = splitReportIntoSections(normalizedText);
+        const violationText = sections.violations.join('\n');
+        const passedText = sections.passed.join('\n');
+        const recommendationsText = sections.recommendations.join('\n');
 
-        // Ищем секцию "Позитив"
-        const sectionPatterns = [
-            /Позитив(?:ные аспекты)?\s*\n([\s\S]*?)(?=\nОценка|\nЗаключение|$)/i,
-            /(?:✅\s*)?Позитив(?:ные моменты)?\s*\n([\s\S]*?)(?=\n[📊⚠️🟡]|\nОценка|$)/i
-        ];
+        const violations = NO_VIOLATIONS_RE.test(violationText)
+            ? []
+            : parseListItems(violationText || extractStatusLines(normalizedText, 'violation'), 'violation');
+        const passed = NO_PASSED_RE.test(passedText)
+            ? []
+            : parseListItems(passedText || extractStatusLines(normalizedText, 'passed'), 'passed');
 
-        let passedText = '';
-        for (const pattern of sectionPatterns) {
-            const match = text.match(pattern);
-            if (match) {
-                passedText = match[1];
-                break;
-            }
-        }
+        applyRecommendations(violations, recommendationsText);
 
-        if (!passedText) {
-            // Ищем строки с ✅ по всему тексту
-            const positiveLines = text.match(/✅[^\n]+/g);
-            if (positiveLines) {
-                positiveLines.forEach(line => {
-                    const cleanLine = line.replace(/^✅\s*/, '').trim();
-                    if (cleanLine.length > 10) {
-                        // Разделяем на категорию и описание
-                        const colonIndex = cleanLine.indexOf(':');
-                        if (colonIndex > 0) {
-                            passed.push({
-                                category: cleanLine.substring(0, colonIndex).trim(),
-                                criteria: cleanLine.substring(0, 100),
-                                description: cleanLine.substring(colonIndex + 1).trim()
-                            });
-                        } else {
-                            passed.push({
-                                category: 'Позитивный момент',
-                                criteria: cleanLine.substring(0, 100),
-                                description: cleanLine
-                            });
-                        }
-                    }
-                });
-            }
-            return passed;
-        }
+        const maturity = extractMaturity(normalizedText, sections);
+        const summary = extractSummary(normalizedText, sections, violations.length, passed.length);
+        const conclusion = extractConclusion(normalizedText, sections);
+        const score = extractScore(normalizedText, violations.length, passed.length);
 
-        // Парсим строки
-        const lines = passedText.split('\n');
-        let currentItem = null;
-
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-
-            // Новый пункт (начинается с ✅ или названия)
-            if (trimmed.includes('✅') || trimmed.match(/^[А-Я][а-я]+:/)) {
-                if (currentItem) {
-                    passed.push(currentItem);
-                }
-
-                const cleanLine = trimmed.replace(/^✅\s*/, '');
-                const colonIndex = cleanLine.indexOf(':');
-
-                if (colonIndex > 0) {
-                    currentItem = {
-                        category: cleanLine.substring(0, colonIndex).trim(),
-                        criteria: cleanLine.substring(0, 100),
-                        description: cleanLine.substring(colonIndex + 1).trim()
-                    };
-                } else {
-                    currentItem = {
-                        category: 'Позитивный момент',
-                        criteria: cleanLine.substring(0, 100),
-                        description: cleanLine
-                    };
-                }
-            } else if (currentItem) {
-                // Продолжение описания
-                currentItem.description += ' ' + trimmed;
-            }
-        }
-
-        if (currentItem) {
-            passed.push(currentItem);
-        }
-
-        return passed;
+        return { violations, passed, maturity, summary, conclusion, score };
     }
 
-    function extractMaturity(text) {
-        // Ищем уровень зрелости
+    function extractStatusLines(text, type) {
+        const lines = normalizeReportText(text).split('\n');
+        return lines.filter(line => {
+            if (type === 'violation') return /❌|⚠️|наруш|не\s+соответ|несоответ/i.test(line);
+            return /✅|пройден|соответствует|позитив|выполн/i.test(line) && !/не\s+соответ|наруш/i.test(line);
+        }).join('\n');
+    }
+
+    function extractMaturity(text, sections) {
+        const maturityText = [sections.maturity.join('\n'), text].filter(Boolean).join('\n');
         const patterns = [
-            /Уровень зрелости:\s*(\d+)\s*(?:\([^)]+\))?\s*\n([\s\S]*?)(?=\n\n|$)/i,
-            /Оценка зрелости[^:]*:\s*(\d+)\s*(?:\([^)]+\))?/i,
-            /Уровень\s*(\d+)\s*\([^)]+\)/i
+            /(?:уровень|оценка)\s+зрелости[^0-9]{0,80}([1-5])\s*(?:\/|из)?\s*5?/i,
+            /зрелость[^0-9]{0,80}([1-5])\s*(?:\/|из)?\s*5?/i,
+            /\b([1-5])\s*\/\s*5\b/
         ];
 
         for (const pattern of patterns) {
-            const match = text.match(pattern);
+            const match = maturityText.match(pattern);
             if (match) {
+                const level = Math.min(5, Math.max(1, parseInt(match[1], 10)));
+                const line = maturityText.split('\n').find(item => pattern.test(item)) || '';
                 return {
-                    level: parseInt(match[1]),
-                    description: match[2] ? match[2].trim().substring(0, 200) : 'Уровень определён'
+                    level,
+                    description: stripMarkdownSyntax(line.replace(match[1], '').replace(/^[^:]+:\s*/, '')) || 'Уровень определён'
                 };
             }
         }
 
-        return { level: 2, description: 'Требуется оценка' };
+        return { level: null, description: 'Не указана в отчёте' };
     }
 
-    function extractSummary(text) {
-        // Ищем итог
-        const patterns = [
-            /Итог\s*\n([^\n]+(?:\n[^\n]+){0,2})/i,
-            /🟡\s*Итог\s*\n([^\n]+)/i,
-            /##\s*Итог\s*\n([^\n]+)/i
-        ];
+    function extractSummary(text, sections, violationsCount, passedCount) {
+        const summaryText = sections.summary.join('\n').trim();
+        if (summaryText) return firstMeaningfulText(summaryText);
 
-        for (const pattern of patterns) {
-            const match = text.match(pattern);
-            if (match) {
-                return match[1].trim().replace(/\n/g, ' ');
-            }
-        }
+        const explicit = text.match(/(?:итог|сводка|результат проверки|вердикт)\s*:\s*([^\n]+)/i);
+        if (explicit) return stripMarkdownSyntax(explicit[1]);
 
-        // Первое предложение как итог
-        const firstLine = text.split('\n')[0];
-        if (firstLine && firstLine.length > 20) {
-            return firstLine;
-        }
+        if (violationsCount === 0 && passedCount > 0) return 'Проверка пройдена, нарушений стандартов не найдено';
+        if (violationsCount > 0) return `Найдено нарушений: ${violationsCount}. Пройдено проверок: ${passedCount}.`;
 
-        return 'Проверка завершена';
+        return firstMeaningfulText(text) || 'Проверка завершена';
     }
 
-    function extractConclusion(text) {
-        // Ищем заключение или вывод
-        const patterns = [
-            /Заключение\s*\n([^\n]+(?:\n[^\n]+){0,3})/i,
-            /Вывод:?\s*\n([^\n]+)/i,
-            /Рекомендации по повышению зрелости[:\s]*\n([\s\S]*?)(?=\n\n|$)/i
-        ];
-
-        for (const pattern of patterns) {
-            const match = text.match(pattern);
-            if (match) {
-                return match[1].trim().replace(/\n/g, ' ');
-            }
-        }
-
-        return '';
+    function firstMeaningfulText(text) {
+        const line = normalizeReportText(text)
+            .split('\n')
+            .map(stripMarkdownSyntax)
+            .find(item => item.length > 12 && !getSectionKey(item));
+        return line ? line.slice(0, 240) : '';
     }
 
-    function parseAndDisplayValidationResults(responseText) {
+    function extractConclusion(text, sections) {
+        const conclusionMatch = text.match(/(?:заключение|вывод)\s*:?\s*\n?([^\n]+(?:\n[^\n]+){0,2})/i);
+        if (conclusionMatch) return stripMarkdownSyntax(conclusionMatch[1]).slice(0, 360);
+
+        const recommendationText = sections.recommendations.join('\n');
+        return firstMeaningfulText(recommendationText).slice(0, 360);
+    }
+
+    function extractScore(text, violationsCount, passedCount) {
+        const percentMatch = text.match(/(?:оценка|соответствие|готовность|score|итог)[^0-9%]{0,60}(\d{1,3})\s*%/i)
+            || text.match(/(\d{1,3})\s*%\s*(?:соответств|готовност|успешн|пройден)/i);
+
+        if (percentMatch) return Math.min(100, Math.max(0, parseInt(percentMatch[1], 10)));
+
+        const total = violationsCount + passedCount;
+        if (total > 0) return Math.round((passedCount / total) * 100);
+        return violationsCount === 0 ? 100 : 0;
+    }
+
+    function looksLikeValidationReport(text) {
+        const normalized = normalizeReportText(text).toLowerCase();
+        if (!normalized) return false;
+
+        const hasReportSection = [
+            'наруш', 'несоответ', 'пройден', 'позитив', 'рекомендац', 'оценка зрелости', 'уровень зрелости'
+        ].some(token => normalized.includes(token));
+
+        const hasValidationContext = /стандарт|провер|архитектур|соответств/.test(normalized);
+        return hasReportSection && hasValidationContext;
+    }
+
+    function resetValidationPanel() {
+        lastValidationResults = null;
+        if (violationsContent) violationsContent.innerHTML = EMPTY_VALIDATION_HTML;
+        if (passedContent) passedContent.innerHTML = EMPTY_VALIDATION_HTML;
+        if (summaryContent) summaryContent.innerHTML = EMPTY_VALIDATION_HTML;
+        updateValidationTabCounters(0, 0);
+        if (showValidationBtn) showValidationBtn.classList.add('hidden');
+        if (validationPanel) validationPanel.classList.add('hidden');
+    }
+
+    function showValidationLoading() {
+        if (!violationsContent || !passedContent || !summaryContent) return;
+
+        violationsContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Анализирую отчёт проверки...</p>';
+        passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Жду завершения генерации...</p>';
+        summaryContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Сводка появится после ответа модели</p>';
+        updateValidationTabCounters(0, 0);
+        showValidationPanel();
+    }
+
+    function updateValidationTabCounters(violationsCount, passedCount) {
+        const labels = {
+            violations: ['Нарушения', violationsCount],
+            passed: ['Пройдено', passedCount],
+            summary: ['Сводка', null]
+        };
+
+        Object.entries(labels).forEach(([key, [label, count]]) => {
+            const tab = document.getElementById(`tab-${key}`);
+            if (!tab) return;
+            tab.innerHTML = count === null
+                ? label
+                : `${label} <span class="validation-count">${count}</span>`;
+        });
+    }
+
+    function parseAndDisplayValidationResults(responseText, options = {}) {
         if (!violationsContent || !passedContent || !summaryContent) return;
 
         lastValidationResults = responseText;
+        const report = extractValidationReport(responseText);
 
         violationsContent.innerHTML = '';
         passedContent.innerHTML = '';
         summaryContent.innerHTML = '';
+        updateValidationTabCounters(report.violations.length, report.passed.length);
 
-        const violations = extractViolations(responseText);
-        const passed = extractPassed(responseText);
-        const maturity = extractMaturity(responseText);
-        const summary = extractSummary(responseText);
-        const conclusion = extractConclusion(responseText);
-
-        if (violations.length === 0) {
-            violationsContent.innerHTML = '<p class="text-green-500 text-sm text-center py-4">✅ Нарушений не обнаружено</p>';
+        if (report.violations.length === 0) {
+            violationsContent.innerHTML = '<p class="text-green-500 text-sm text-center py-4">Нарушений не обнаружено</p>';
         } else {
-            violations.forEach(v => violationsContent.appendChild(createViolationCard(v)));
+            report.violations.forEach(v => violationsContent.appendChild(createViolationCard(v)));
         }
 
-        if (passed.length === 0) {
-            passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Позитивные моменты не выделены</p>';
+        if (report.passed.length === 0) {
+            passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Пройденные проверки не выделены</p>';
         } else {
-            passed.forEach(p => passedContent.appendChild(createPassedCard(p)));
+            report.passed.forEach(p => passedContent.appendChild(createPassedCard(p)));
         }
 
-        summaryContent.innerHTML = createSummaryHTML(violations.length, passed.length, maturity, summary, conclusion);
+        summaryContent.innerHTML = createSummaryHTML(report);
 
         if (showValidationBtn) showValidationBtn.classList.remove('hidden');
-        showValidationPanel();
+        if (options.openPanel !== false) showValidationPanel();
     }
 
     function createViolationCard(violation) {
@@ -603,33 +771,34 @@
         return card;
     }
 
-    function createSummaryHTML(violationsCount, passedCount, maturity, summary, conclusion) {
-        const total = violationsCount + passedCount;
-        const score = total > 0 ? Math.round((passedCount / total) * 100) : 0;
+    function createSummaryHTML(report) {
+        const { violations, passed, maturity, summary, conclusion, score } = report;
+        const scoreClass = score >= 80 ? 'text-green-500' : score >= 50 ? 'text-yellow-500' : 'text-red-500';
+        const maturityValue = maturity.level ? `${maturity.level}/5` : '—';
 
         return `
             <div class="space-y-4">
                 <div class="text-center py-4">
-                    <div class="text-4xl font-bold ${score >= 70 ? 'text-green-500' : score >= 40 ? 'text-yellow-500' : 'text-red-500'}">${score}%</div>
+                    <div class="text-4xl font-bold ${scoreClass}">${score}%</div>
                     <div class="text-sm text-gray-500 mt-1">${escapeHtml(summary)}</div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-green-500/10 p-4 rounded-xl text-center">
-                        <div class="text-2xl font-bold text-green-500">${passedCount}</div>
+                    <div class="validation-stat bg-green-500/10 text-center">
+                        <div class="text-2xl font-bold text-green-500">${passed.length}</div>
                         <div class="text-xs text-gray-500">Пройдено</div>
                     </div>
-                    <div class="bg-red-500/10 p-4 rounded-xl text-center">
-                        <div class="text-2xl font-bold text-red-500">${violationsCount}</div>
+                    <div class="validation-stat bg-red-500/10 text-center">
+                        <div class="text-2xl font-bold text-red-500">${violations.length}</div>
                         <div class="text-xs text-gray-500">Нарушений</div>
                     </div>
                 </div>
-                <div class="bg-primary/10 p-4 rounded-xl text-center">
+                <div class="validation-stat bg-primary/10 text-center">
                     <div class="text-sm text-gray-400">Уровень зрелости</div>
-                    <div class="text-xl font-bold text-primary">${maturity.level}/5</div>
+                    <div class="text-xl font-bold text-primary">${maturityValue}</div>
                     <div class="text-xs text-gray-500 mt-1">${escapeHtml(maturity.description)}</div>
                 </div>
                 ${conclusion ? `
-                <div class="bg-surface-container-high/50 p-4 rounded-xl border border-outline-variant">
+                <div class="validation-note bg-surface-container-high/50 border border-outline-variant">
                     <div class="text-xs text-gray-400 mb-1">Заключение</div>
                     <div class="text-sm">${escapeHtml(conclusion)}</div>
                 </div>
@@ -714,6 +883,7 @@
 
         setLoading(true);
         let fullText = '';
+        showValidationLoading();
 
         let url;
         if (uploadedDocumentId) {
@@ -787,6 +957,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chatId: currentChatId, role: 'assistant', content: fullText })
                 });
+                if (looksLikeValidationReport(fullText)) {
+                    parseAndDisplayValidationResults(fullText);
+                }
             }
         };
     };

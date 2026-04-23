@@ -246,6 +246,27 @@ main {
     border-left: 4px solid #10b981;
 }
 
+.validation-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: inherit;
+    font-size: 11px;
+    line-height: 1;
+}
+
+.validation-stat,
+.validation-note {
+    padding: 16px;
+    border-radius: 8px;
+}
+
 .criteria-title {
     font-weight: 600;
     margin-bottom: 8px;
@@ -285,6 +306,21 @@ html:not(.dark) .criteria-description {
 html:not(.dark) .recommendation {
     background: #eff6ff;
     border-color: #bfdbfe;
+}
+
+html:not(.dark) #validation-panel {
+    background-color: #ffffff;
+    border-color: #e5e7eb;
+    color: #111827;
+}
+
+html:not(.dark) .validation-count {
+    background: #eef2ff;
+}
+
+html:not(.dark) .validation-note {
+    background: #ffffff;
+    border-color: #e5e7eb;
 }
 
 
