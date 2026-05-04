@@ -36,6 +36,13 @@ learning:
   schedule: "0 0 0 1 * ?"
   chunk-size: 1000
 
+ocr:
+  tesseract:
+    enabled: true
+    executable: "C:/Program Files/Tesseract-OCR/tesseract.exe"
+    language: rus+eng
+    timeout-seconds: 120
+
 logging:
   level:
     com.ertekom: DEBUG
