@@ -183,7 +183,7 @@
         });
 
         wrapper.innerHTML = `
-            <div class="max-w-[85%]">
+            <div class="max-w-[85%] min-w-0">
                 <div class="flex items-center gap-2 mb-1 ${isAI ? '' : 'justify-end'}">
                     ${isAI ? '<span class="text-primary font-bold text-[10px] uppercase tracking-widest">ArchAssistant</span>' : ''}
                     <span class="text-[10px] text-gray-500 cursor-help" title="${fullDateTime}">${timeString}</span>
