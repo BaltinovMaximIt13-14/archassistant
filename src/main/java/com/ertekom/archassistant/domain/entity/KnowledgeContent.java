@@ -1,5 +1,6 @@
 package com.ertekom.archassistant.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,5 +33,6 @@ public class KnowledgeContent {
 
     @ManyToOne
     @JoinColumn(name = "file_id")
+    @JsonBackReference
     private KnowledgeFile file;
 }

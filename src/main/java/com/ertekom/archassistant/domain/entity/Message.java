@@ -1,5 +1,6 @@
 package com.ertekom.archassistant.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,5 +39,6 @@ public class Message {
 
     @ManyToOne
     @JoinColumn(name = "chat_id")
+    @JsonBackReference
     private Chat chat;
 }

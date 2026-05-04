@@ -1,0 +1,379 @@
+/* Основные шрифты и фон */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #000;
+    color: #fff;
+    width: 100vw;
+}
+
+main,
+#chat-window,
+.input-area-container,
+.input-box {
+    min-width: 0;
+}
+
+main {
+    overflow-x: hidden;
+}
+
+#chat-window {
+    overflow-x: hidden;
+}
+
+.font-headline {
+    font-family: 'Manrope', sans-serif;
+}
+
+/* Оформление контента от ИИ (Markdown) */
+.ai-content {
+    line-height: 1.6;
+    font-size: 0.95rem;
+    color: #e5e7eb;
+    white-space: normal;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.ai-content p { margin-bottom: 1.25rem; }
+.ai-content strong { color: #fff; font-weight: 700; }
+
+.ai-content h3 {
+    font-family: 'Manrope';
+    color: #fff;
+    font-weight: 800;
+    margin: 1.5rem 0 0.5rem 0;
+}
+
+.ai-content ul {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.ai-content pre {
+    background: #0a0a0a;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.ai-content code {
+    background: #1e1e1e;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.4rem;
+}
+
+/* Скроллбары */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+
+/* Состояние активного чата в меню */
+.chat-active {
+    background: rgba(255,255,255,0.1);
+    border-left: 4px solid #0054a6;
+    color: white !important;
+}
+
+/* Индикатор загрузки (пульсация) */
+.dot-pulse {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background-color: #0054a6;
+    animation: pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+}
+
+body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; }
+.font-headline { font-family: 'Manrope', sans-serif; }
+.ai-content { line-height: 1.6; font-size: 0.95rem; color: #e5e7eb; white-space: normal; }
+.ai-content { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+.ai-content p { margin-bottom: 1.25rem; }
+.ai-content strong { color: #fff; font-weight: 700; }
+.ai-content h3 { font-family: 'Manrope'; color: #fff; font-weight: 800; margin: 1.5rem 0 0.5rem 0; }
+.ai-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.25rem; }
+.ai-content pre { background: #0a0a0a; padding: 1rem; border-radius: 0.75rem; max-width: 100%; overflow-x: auto; margin-bottom: 1.25rem; }
+.ai-content code { background: #1e1e1e; padding: 0.2rem 0.4rem; border-radius: 0.4rem; font-family: monospace; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+.chat-active { background: rgba(255,255,255,0.1); border-left: 4px solid #0054a6; color: white !important; }
+.dot-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #0054a6; animation: pulse 1.2s infinite ease-in-out; }
+@keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+
+/* Общие настройки */
+body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+.font-headline { font-family: 'Manrope', sans-serif; }
+
+/* ТЕМНАЯ ТЕМА (По умолчанию) */
+html.dark body { background-color: #000; color: #fff; }
+html.dark .sidebar { background-color: #050505; border-color: rgba(255,255,255,0.1); }
+html.dark .main-bg { background-color: #050505; }
+html.dark .header-bg { background-color: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.1); }
+html.dark .input-box { background-color: #1a1a1a; border-color: rgba(255,255,255,0.1); }
+html.dark #user-input { color: white; }
+
+/* СВЕТЛАЯ ТЕМА */
+html:not(.dark) body { background-color: #f3f4f6; color: #1f2937; }
+html:not(.dark) .sidebar { background-color: #ffffff; border-color: #e5e7eb; }
+html:not(.dark) .logo-text { color: #111827; }
+html:not(.dark) .btn-new-chat { background-color: #111827; color: white; }
+html:not(.dark) .btn-new-chat:hover { background-color: #374151; }
+html:not(.dark) .main-bg { background-color: #f9fafb; }
+html:not(.dark) .header-bg { background-color: white; border-color: #e5e7eb; }
+html:not(.dark) #active-chat-title { color: #6b7280; }
+html:not(.dark) .input-area-container { from: #f9fafb; via: #f9fafb; } /* Убираем черный градиент */
+html:not(.dark) .input-box { background-color: white; border-color: #d1d5db; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+html:not(.dark) #user-input { color: #111827; }
+html:not(.dark) .footer-brand p { color: #9ca3af; }
+html:not(.dark) .ai-content { color: #374151; }
+html:not(.dark) .ai-content strong { color: #111827; }
+html:not(.dark) .ai-content h3 { color: #111827; }
+html:not(.dark) .ai-content pre { background: #f1f5f9; border: 1px solid #e2e8f0; }
+html:not(.dark) .ai-content code { background: #e2e8f0; color: #000; }
+
+/* Markdown & UI */
+.ai-content { line-height: 1.6; font-size: 0.95rem; white-space: normal; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+.ai-content p { margin-bottom: 1.25rem; }
+.ai-content h3 { font-family: 'Manrope'; font-weight: 800; margin: 1.5rem 0 0.5rem 0; }
+.ai-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.25rem; }
+.ai-content pre { padding: 1rem; border-radius: 0.75rem; max-width: 100%; overflow-x: auto; margin-bottom: 1.25rem; }
+.ai-content code { padding: 0.2rem 0.4rem; border-radius: 0.4rem; font-family: monospace; }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+
+.chat-active { background: #0054a6 !important; color: white !important; }
+
+.dot-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #0054a6; animation: pulse 1.2s infinite ease-in-out; }
+@keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+
+/* Дополнительный стиль для кнопки "Проверить" (уже определён в Tailwind, но можно переопределить) */
+button.bg-green-600 {
+    transition: all 0.2s;
+}
+button.bg-green-600:hover {
+    background-color: #15803d;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+#knowledge-chevron {
+    transition: transform 0.3s;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Градиент для области ввода в тёмной теме */
+html.dark .input-area-container {
+    background: linear-gradient(to top, #000000, rgba(0,0,0,0.8), transparent);
+}
+
+/* В светлой теме убираем градиент (или делаем светлый) */
+html:not(.dark) .input-area-container {
+    background: transparent; /* или любой светлый фон, например #f9fafb */
+}
+
+/* Плавное сворачивание сайдбара */
+aside {
+    transition: width 0.3s ease, opacity 0.3s ease, padding 0.3s ease, border 0.3s ease;
+    overflow: hidden;
+    width: 320px; /* соответствует w-80 (20rem) */
+    min-width: 320px;
+    opacity: 1;
+}
+
+aside.sidebar-collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    opacity: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border-right-width: 0 !important;
+    pointer-events: none; /* чтобы нельзя было кликнуть в скрытую область */
+}
+
+/* Плавное изменение основной области */
+main {
+    transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+/* Плавное раскрытие секции знаний */
+#knowledge-section {
+    max-height: 500px;  /* достаточно для содержимого */
+    opacity: 1;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease;
+}
+
+#knowledge-section.collapsed {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Шеврон уже имеет transition в style.css */
+#knowledge-chevron {
+    transition: transform 0.3s;
+}
+
+
+/* Карточки критериев */
+.criteria-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.2s;
+}
+
+.criteria-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.criteria-card.violation {
+    border-left: 4px solid #ef4444;
+}
+
+.criteria-card.passed {
+    border-left: 4px solid #10b981;
+}
+
+.validation-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: inherit;
+    font-size: 11px;
+    line-height: 1;
+}
+
+.validation-stat,
+.validation-note {
+    padding: 16px;
+    border-radius: 8px;
+}
+
+.criteria-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.criteria-description {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    margin-bottom: 12px;
+}
+
+.recommendation {
+    background: rgba(0, 84, 166, 0.1);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    border: 1px solid rgba(0, 84, 166, 0.3);
+}
+
+/* Светлая тема */
+html:not(.dark) .criteria-card {
+    background: #ffffff;
+    border-color: #e5e7eb;
+}
+
+html:not(.dark) .criteria-card:hover {
+    background: #f9fafb;
+}
+
+html:not(.dark) .criteria-description {
+    color: #6b7280;
+}
+
+html:not(.dark) .recommendation {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+html:not(.dark) #validation-panel {
+    background-color: #ffffff;
+    border-color: #e5e7eb;
+    color: #111827;
+}
+
+html:not(.dark) .validation-count {
+    background: #eef2ff;
+}
+
+html:not(.dark) .validation-note {
+    background: #ffffff;
+    border-color: #e5e7eb;
+}
+
+
+/* Стили для временных меток */
+.message-time {
+    font-size: 10px;
+    color: #6b7280;
+    opacity: 0.7;
+}
+
+/* При наведении показываем полную дату */
+.message-time:hover {
+    opacity: 1;
+}
+
+/* Для светлой темы */
+html:not(.dark) .message-time {
+    color: #9ca3af;
+}
+
+/* Анимация появления сообщений */
+@keyframes messageAppear {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.flex > div {
+    animation: messageAppear 0.3s ease-out;
+}

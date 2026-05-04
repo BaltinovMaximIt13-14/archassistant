@@ -3,6 +3,8 @@ package com.ertekom.archassistant.service;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -10,16 +12,24 @@ import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.InputStream;
+import java.awt.image.BufferedImage;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Service
 @RequiredArgsConstructor
 public class TextExtractorService {
 
     private final Tika tika = new Tika();
+    private final OcrService ocrService;
+    private static final int PDF_OCR_DPI = 300;
+    private static final int MIN_MEANINGFUL_TEXT_LENGTH = 20;
 
     public String extractText(MultipartFile file, String fileName) throws Exception {
-        String lowerName = fileName.toLowerCase();
+        String lowerName = fileName != null ? fileName.toLowerCase() : "";
 
         if (lowerName.endsWith(".docx")) {
             return extractFromDocx(file);
@@ -27,6 +37,8 @@ public class TextExtractorService {
             return extractFromPdf(file);
         } else if (lowerName.endsWith(".txt") || lowerName.endsWith(".md")) {
             return extractFromText(file);
+        } else if (isImageFile(lowerName)) {
+            return extractFromImage(file, lowerName);
         } else if (lowerName.endsWith(".odt")) {
             return extractFromOdt(file);
         } else {
@@ -34,10 +46,39 @@ public class TextExtractorService {
         }
     }
 
+    public String extractText(File file) throws Exception {
+        String lowerName = file.getName().toLowerCase();
+
+        if (lowerName.endsWith(".docx")) {
+            return extractFromDocx(file);
+        } else if (lowerName.endsWith(".pdf")) {
+            return extractFromPdf(file);
+        } else if (lowerName.endsWith(".txt") || lowerName.endsWith(".md")) {
+            return Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        } else if (isImageFile(lowerName)) {
+            return ocrService.recognize(file);
+        } else if (lowerName.endsWith(".odt")) {
+            return tika.parseToString(file);
+        } else {
+            return tika.parseToString(file);
+        }
+    }
+
     private String extractFromDocx(MultipartFile file) throws Exception {
+        try (InputStream is = file.getInputStream()) {
+            return extractFromDocx(is);
+        }
+    }
+
+    private String extractFromDocx(File file) throws Exception {
+        try (InputStream is = Files.newInputStream(file.toPath())) {
+            return extractFromDocx(is);
+        }
+    }
+
+    private String extractFromDocx(InputStream is) throws Exception {
         StringBuilder text = new StringBuilder();
-        try (InputStream is = file.getInputStream();
-             XWPFDocument doc = new XWPFDocument(is)) {
+        try (XWPFDocument doc = new XWPFDocument(is)) {
 
             for (XWPFParagraph paragraph : doc.getParagraphs()) {
                 String paraText = paragraph.getText();
@@ -50,22 +91,88 @@ public class TextExtractorService {
     }
 
     private String extractFromPdf(MultipartFile file) throws Exception {
-        StringBuilder text = new StringBuilder();
-        try (InputStream is = file.getInputStream();
-             PDDocument document = Loader.loadPDF(is.readAllBytes())) {
+        try (InputStream is = file.getInputStream()) {
+            return extractFromPdf(is);
+        }
+    }
 
-            PDFTextStripper stripper = new PDFTextStripper();
-            String pdfText = stripper.getText(document);
-            text.append(pdfText);
+    private String extractFromPdf(File file) throws Exception {
+        try (InputStream is = Files.newInputStream(file.toPath())) {
+            return extractFromPdf(is);
+        }
+    }
+
+    private String extractFromPdf(InputStream is) throws Exception {
+        StringBuilder text = new StringBuilder();
+        try (PDDocument document = Loader.loadPDF(is.readAllBytes())) {
+            PDFRenderer renderer = new PDFRenderer(document);
+
+            for (int page = 1; page <= document.getNumberOfPages(); page++) {
+                PDFTextStripper stripper = new PDFTextStripper();
+                stripper.setStartPage(page);
+                stripper.setEndPage(page);
+
+                String pageText = normalizeText(stripper.getText(document));
+                if (hasMeaningfulText(pageText)) {
+                    text.append(pageText);
+                } else {
+                    BufferedImage pageImage = renderer.renderImageWithDPI(page - 1, PDF_OCR_DPI, ImageType.RGB);
+                    String ocrText = normalizeText(ocrService.recognize(pageImage, "pdf-page-" + page));
+                    text.append(ocrText);
+                }
+
+                if (page < document.getNumberOfPages()) {
+                    text.append("\n\n");
+                }
+            }
         }
         return text.toString();
     }
 
     private String extractFromText(MultipartFile file) throws Exception {
-        return new String(file.getBytes(), "UTF-8");
+        return new String(file.getBytes(), StandardCharsets.UTF_8);
+    }
+
+    private String extractFromImage(MultipartFile file, String fileName) throws Exception {
+        Path tempFile = Files.createTempFile("upload-image-", getImageSuffix(fileName));
+        try {
+            Files.write(tempFile, file.getBytes());
+            return ocrService.recognize(tempFile.toFile());
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
     }
 
     private String extractFromOdt(MultipartFile file) throws Exception {
         return tika.parseToString(file.getInputStream());
+    }
+
+    private boolean isImageFile(String lowerName) {
+        return lowerName.endsWith(".png") ||
+                lowerName.endsWith(".jpg") ||
+                lowerName.endsWith(".jpeg") ||
+                lowerName.endsWith(".tif") ||
+                lowerName.endsWith(".tiff") ||
+                lowerName.endsWith(".bmp");
+    }
+
+    private boolean hasMeaningfulText(String text) {
+        return text != null && text.replaceAll("\\s+", "").length() >= MIN_MEANINGFUL_TEXT_LENGTH;
+    }
+
+    private String normalizeText(String text) {
+        if (text == null) return "";
+        return text
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .trim();
+    }
+
+    private String getImageSuffix(String fileName) {
+        int dotIndex = fileName == null ? -1 : fileName.lastIndexOf('.');
+        if (dotIndex >= 0 && dotIndex < fileName.length() - 1) {
+            return fileName.substring(dotIndex);
+        }
+        return ".png";
     }
 }
