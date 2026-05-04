@@ -3,8 +3,6 @@ package com.ertekom.archassistant.service;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.rendering.ImageType;
-import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -14,7 +12,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.InputStream;
-import java.awt.image.BufferedImage;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,8 +22,6 @@ public class TextExtractorService {
 
     private final Tika tika = new Tika();
     private final OcrService ocrService;
-    private static final int PDF_OCR_DPI = 300;
-    private static final int MIN_MEANINGFUL_TEXT_LENGTH = 20;
 
     public String extractText(MultipartFile file, String fileName) throws Exception {
         String lowerName = fileName != null ? fileName.toLowerCase() : "";
@@ -105,21 +100,14 @@ public class TextExtractorService {
     private String extractFromPdf(InputStream is) throws Exception {
         StringBuilder text = new StringBuilder();
         try (PDDocument document = Loader.loadPDF(is.readAllBytes())) {
-            PDFRenderer renderer = new PDFRenderer(document);
-
             for (int page = 1; page <= document.getNumberOfPages(); page++) {
                 PDFTextStripper stripper = new PDFTextStripper();
                 stripper.setStartPage(page);
                 stripper.setEndPage(page);
+                stripper.setSortByPosition(true);
 
                 String pageText = normalizeText(stripper.getText(document));
-                if (hasMeaningfulText(pageText)) {
-                    text.append(pageText);
-                } else {
-                    BufferedImage pageImage = renderer.renderImageWithDPI(page - 1, PDF_OCR_DPI, ImageType.RGB);
-                    String ocrText = normalizeText(ocrService.recognize(pageImage, "pdf-page-" + page));
-                    text.append(ocrText);
-                }
+                text.append(pageText);
 
                 if (page < document.getNumberOfPages()) {
                     text.append("\n\n");
@@ -154,10 +142,6 @@ public class TextExtractorService {
                 lowerName.endsWith(".tif") ||
                 lowerName.endsWith(".tiff") ||
                 lowerName.endsWith(".bmp");
-    }
-
-    private boolean hasMeaningfulText(String text) {
-        return text != null && text.replaceAll("\\s+", "").length() >= MIN_MEANINGFUL_TEXT_LENGTH;
     }
 
     private String normalizeText(String text) {

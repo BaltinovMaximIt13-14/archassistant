@@ -165,12 +165,48 @@
         loadChats();
     }
 
+    function normalizeAssistantMarkdown(content) {
+        let text = (content || '')
+            .replace(/\r\n?/g, '\n')
+            .trim();
+
+        text = unwrapMarkdownFence(text);
+        text = dedentMarkdown(text);
+        return unwrapMarkdownFence(text).trim();
+    }
+
+    function unwrapMarkdownFence(text) {
+        const match = text.match(/^```(?:markdown|md|text)?\s*\n([\s\S]*?)\n```\s*$/i);
+        return match ? match[1].trim() : text;
+    }
+
+    function dedentMarkdown(text) {
+        const lines = text.split('\n');
+        const indents = lines
+            .filter(line => line.trim())
+            .map(line => (line.match(/^[ \t]*/) || [''])[0].replace(/\t/g, '    ').length);
+
+        if (!indents.length) return text;
+        const minIndent = Math.min(...indents);
+        if (minIndent < 4) return text;
+
+        return lines
+            .map(line => line.trim() ? line.slice(Math.min(minIndent, line.length)) : '')
+            .join('\n')
+            .trim();
+    }
+
+    function renderAssistantMarkdown(container, content) {
+        if (!container) return;
+        container.innerHTML = marked.parse(normalizeAssistantMarkdown(content));
+    }
+
     function appendMessage(role, content) {
         if (!chatWindow) return null;
         const wrapper = document.createElement('div');
         const isAI = role === 'assistant';
         wrapper.className = `flex ${isAI ? 'justify-start' : 'justify-end'} mb-4`;
-        const htmlContent = isAI ? marked.parse(content) : content;
+        const htmlContent = isAI ? marked.parse(normalizeAssistantMarkdown(content)) : content;
 
         const now = new Date();
         const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -901,7 +937,7 @@
             } catch {
                 fullText += event.data;
             }
-            aiContainer.innerHTML = marked.parse(fullText);
+            renderAssistantMarkdown(aiContainer, fullText);
             if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
         };
 
@@ -916,7 +952,7 @@
                 });
                 parseAndDisplayValidationResults(fullText);
             } else {
-                aiContainer.innerHTML = marked.parse('⚠️ **Ошибка:** не удалось получить ответ от сервера.');
+                renderAssistantMarkdown(aiContainer, '⚠️ **Ошибка:** не удалось получить ответ от сервера.');
             }
             clearAttachedFile();
         };
@@ -945,7 +981,7 @@
         currentEventSource.onmessage = (e) => {
             try { fullText += JSON.parse(e.data).content || ''; }
             catch { fullText += e.data; }
-            aiContainer.innerHTML = marked.parse(fullText);
+            renderAssistantMarkdown(aiContainer, fullText);
             if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
         };
         currentEventSource.onerror = () => {
