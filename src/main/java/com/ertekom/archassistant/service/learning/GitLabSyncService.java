@@ -7,7 +7,9 @@ import com.ertekom.archassistant.repository.KnowledgeContentRepository;
 import com.ertekom.archassistant.repository.KnowledgeFileRepository;
 import com.ertekom.archassistant.repository.KnowledgeSourceRepository;
 import com.ertekom.archassistant.service.TextExtractorService;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -24,19 +26,24 @@ import java.security.NoSuchAlgorithmException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.HashMap;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class GitLabSyncService {
 
-    private final KnowledgeSourceRepository sourceRepository;
-    private final KnowledgeFileRepository fileRepository;
-    private final KnowledgeContentRepository contentRepository;
-    private final EmbeddingModel embeddingModel;
-    private final JdbcTemplate jdbcTemplate;
-    private final TextExtractorService textExtractorService;
+    KnowledgeSourceRepository sourceRepository;
+    KnowledgeFileRepository fileRepository;
+    KnowledgeContentRepository contentRepository;
+    EmbeddingModel embeddingModel;
+    JdbcTemplate jdbcTemplate;
+    TextExtractorService textExtractorService;
 
     @Transactional
     public void syncKnowledgeSource(KnowledgeSource source) throws IOException, GitAPIException {
@@ -84,10 +91,10 @@ public class GitLabSyncService {
                 : repoPath.resolve(normalizedLocalPath).normalize();
 
         if (!rootPath.startsWith(repoPath)) {
-            throw new IOException("Knowledge source path points outside repository: " + localPath);
+            throw new IOException("Пути к источникам знаний находятся вне репозитория: " + localPath);
         }
         if (!Files.exists(rootPath) || !Files.isDirectory(rootPath)) {
-            log.warn("Knowledge source path '{}' not found, repository root will be scanned", localPath);
+            log.warn("Путь к источнику знаний '{}' не найден, корневой каталог репозитория будет просканирован", localPath);
             return repoPath.toFile();
         }
         return rootPath.toFile();
@@ -136,7 +143,6 @@ public class GitLabSyncService {
             return;
         }
 
-        // Сохраняем метаданные файла
         String relativePath = toRelativePath(rootPath, file.toPath());
         KnowledgeFile knowledgeFile = new KnowledgeFile();
         knowledgeFile.setFileName(file.getName());
@@ -147,7 +153,6 @@ public class GitLabSyncService {
         knowledgeFile.setSource(source);
         knowledgeFile = fileRepository.save(knowledgeFile);
 
-        // Разбиваем на чанки (по 1000 символов)
         List<String> chunks = splitIntoChunks(text, 1000);
         List<KnowledgeContent> contents = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i++) {
@@ -160,7 +165,6 @@ public class GitLabSyncService {
         }
         contentRepository.saveAll(contents);
 
-        // 🔥 Ручное сохранение эмбеддингов в vector_store
         for (KnowledgeContent content : contents) {
             float[] embedding = embeddingModel.embed(content.getChunkContent());
             String vectorStr = arrayToPgVector(embedding);

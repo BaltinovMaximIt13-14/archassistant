@@ -8,7 +8,9 @@ import com.ertekom.archassistant.repository.DocumentChunkRepository;
 import com.ertekom.archassistant.repository.DocumentRepository;
 import com.ertekom.archassistant.repository.VectorStoreRepository;
 
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +23,15 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class DocumentService {
 
-    private final DocumentRepository documentRepository;
-    private final DocumentChunkRepository documentChunkRepository;
-    private final VectorStoreRepository vectorStoreRepository;
-    private final ChatService chatService;
-    private final TextExtractorService textExtractorService;
-    private final Tika tika = new Tika();
+    DocumentRepository documentRepository;
+    DocumentChunkRepository documentChunkRepository;
+    VectorStoreRepository vectorStoreRepository;
+    ChatService chatService;
+    TextExtractorService textExtractorService;
+    Tika tika = new Tika();
 
     @Transactional
     public Document createDocument(UUID chatId, String fileName, String fileHash,
@@ -48,11 +51,6 @@ public class DocumentService {
         return documentRepository.save(document);
     }
 
-    public Document findById(UUID id) {
-        return documentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Document not found: " + id));
-    }
-
     public List<Document> findByChatId(UUID chatId) {
         return documentRepository.findByChat_IdOrderByCreatedAtDesc(chatId);
     }
@@ -64,17 +62,6 @@ public class DocumentService {
         documentRepository.deleteById(id);
     }
 
-    @Transactional
-    public void deleteByChatId(UUID chatId) {
-        List<Document> documents = documentRepository.findByChat_Id(chatId);
-        for (Document doc : documents) {
-            vectorStoreRepository.deleteByDocumentId(doc.getId());
-        }
-        documentChunkRepository.deleteByChat_Id(chatId);
-        documentRepository.deleteByChat_Id(chatId);
-    }
-
-    // Метод для загрузки документа (вся логика из контроллера)
     public Map<String, Object> uploadDocument(UUID chatId, MultipartFile file) {
         Map<String, Object> response = new HashMap<>();
 
@@ -96,7 +83,6 @@ public class DocumentService {
                     extractedText
             );
 
-            // Сохраняем чанки (используем репозиторий напрямую, не через DocumentChunkService)
             List<String> chunks = splitIntoChunks(extractedText, 1000);
             for (int i = 0; i < chunks.size(); i++) {
                 saveChunk(document.getId(), chatId, i, chunks.get(i));
@@ -119,10 +105,9 @@ public class DocumentService {
         return response;
     }
 
-    // Вспомогательный метод для сохранения чанка без циклической зависимости
     private void saveChunk(UUID documentId, UUID chatId, Integer chunkIndex, String chunkContent) {
         Document document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
+                .orElseThrow(() -> new RuntimeException("Документ не найден: " + documentId));
         Chat chat = chatService.findById(chatId);
 
         DocumentChunk chunk = new DocumentChunk();

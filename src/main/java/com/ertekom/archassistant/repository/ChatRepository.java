@@ -13,8 +13,6 @@ import java.util.UUID;
 
 public interface ChatRepository extends JpaRepository<Chat, UUID> {
 
-    List<Chat> findByTitleContainingIgnoreCase(String title);
-
     @Query("SELECT c FROM Chat c ORDER BY c.updatedAt DESC")
     List<Chat> findAllOrderByUpdatedAtDesc();
 

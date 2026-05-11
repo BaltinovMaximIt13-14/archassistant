@@ -1,6 +1,8 @@
 package com.ertekom.archassistant.service.learning;
 
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -12,9 +14,10 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class KnowledgeSearchService {
 
-    private final VectorStore vectorStore;
+    VectorStore vectorStore;
 
     public List<String> findRelevantChunks(String query, int topK) {
         try {

@@ -41,25 +41,16 @@ public class KnowledgeSourceService {
 
     public KnowledgeSource findById(UUID id) {
         return sourceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("KnowledgeSource not found: " + id));
-    }
-
-    @Transactional
-    public void updateLastSync(UUID id, OffsetDateTime lastSync) {
-        sourceRepository.updateLastSync(id, lastSync);
+                .orElseThrow(() -> new RuntimeException("Источник знаний не найден: " + id));
     }
 
     @Transactional
     public void deleteById(UUID id) {
-        // Удаляем из vector_store
         vectorStoreRepository.deleteBySourceId(id);
-        // Удаляем содержимое (каскадно через JPA)
         contentRepository.deleteByFile_Source_Id(id);
         fileRepository.deleteBySource_Id(id);
         sourceRepository.deleteById(id);
     }
-
-    // Добавьте эти методы в KnowledgeSourceService
 
     public KnowledgeSource createSource(String repositoryUrl, String branch, String localPath) {
         return create(repositoryUrl, branch, localPath);

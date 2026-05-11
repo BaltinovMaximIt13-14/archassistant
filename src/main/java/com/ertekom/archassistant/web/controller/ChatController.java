@@ -3,7 +3,9 @@ package com.ertekom.archassistant.web.controller;
 import com.ertekom.archassistant.domain.entity.Chat;
 import com.ertekom.archassistant.domain.entity.Message;
 import com.ertekom.archassistant.service.ChatService;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,9 +17,10 @@ import java.util.UUID;
 @RequestMapping("/api/chats")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class ChatController {
 
-    private final ChatService chatService;
+    ChatService chatService;
 
     @PostMapping
     public ResponseEntity<Chat> createChat(@RequestBody(required = false) Map<String, String> request) {

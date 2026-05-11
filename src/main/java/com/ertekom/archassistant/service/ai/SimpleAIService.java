@@ -3,7 +3,9 @@ package com.ertekom.archassistant.service.ai;
 import com.ertekom.archassistant.domain.entity.Document;
 import com.ertekom.archassistant.repository.DocumentRepository;
 import com.ertekom.archassistant.service.learning.KnowledgeSearchService;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.ollama.OllamaChatModel;
@@ -20,12 +22,13 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class SimpleAIService {
 
-    private final OllamaChatModel chatModel;
-    private final KnowledgeSearchService searchService;
-    private final DocumentRepository documentRepository;
-    private final JdbcTemplate jdbcTemplate;
+    OllamaChatModel chatModel;
+    KnowledgeSearchService searchService;
+    DocumentRepository documentRepository;
+    JdbcTemplate jdbcTemplate;
 
     private static final int TOP_K = 5;
 

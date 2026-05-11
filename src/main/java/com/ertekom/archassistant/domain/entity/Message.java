@@ -1,7 +1,14 @@
 package com.ertekom.archassistant.domain.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Table;
+import jakarta.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.JoinColumn;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -24,7 +31,7 @@ public class Message {
     private UUID id;
 
     @Column(nullable = false)
-    private String role;   // 'user' or 'assistant'
+    private String role;
 
     @Column(columnDefinition = "TEXT")
     private String content;
