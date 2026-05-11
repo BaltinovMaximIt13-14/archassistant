@@ -3,12 +3,21 @@ databaseChangeLog:
       id: 010-insert-default-settings
       author: archassistant
       changes:
-        - sql:
-            sql: |
-              INSERT INTO app_settings (setting_key, setting_value) 
-              VALUES ('num_thread', '8') 
-              ON CONFLICT (setting_key) DO NOTHING;
-              
-              INSERT INTO app_settings (setting_key, setting_value) 
-              VALUES ('temperature', '0.3') 
-              ON CONFLICT (setting_key) DO NOTHING;
+        - insert:
+            tableName: app_settings
+            columns:
+              - column:
+                  name: setting_key
+                  value: "num_thread"
+              - column:
+                  name: setting_value
+                  value: "8"
+        - insert:
+            tableName: app_settings
+            columns:
+              - column:
+                  name: setting_key
+                  value: "temperature"
+              - column:
+                  name: setting_value
+                  value: "0.3"

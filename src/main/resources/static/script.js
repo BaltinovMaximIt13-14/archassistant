@@ -1068,13 +1068,28 @@
         });
     }
 
+    // Найдите этот блок в script.js (строка с addEventListener для inputField)
     if (inputField) {
+        // Авто-расширение textarea
+        function autoResizeTextarea() {
+            inputField.style.height = 'auto';
+            const newHeight = Math.min(inputField.scrollHeight, 200); // максимум 200px
+            inputField.style.height = newHeight + 'px';
+        }
+
+        inputField.addEventListener('input', autoResizeTextarea);
+
         inputField.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
+                // Сбрасываем высоту перед отправкой
+                inputField.style.height = 'auto';
                 handleAction('/api/ai/stream', 'message');
             }
         });
+
+        // Вызов при загрузке страницы
+        autoResizeTextarea();
     }
 
     // ---------- УПРАВЛЕНИЕ ИСТОЧНИКАМИ ЗНАНИЙ ----------
@@ -1473,6 +1488,187 @@
             document.getElementById(modalContentId).innerHTML = `<div class="text-center py-8 text-red-400">Ошибка загрузки: ${e.message}</div>`;
         }
     };
+
+    // НАСТРОЙКИ
+    // ========== НАСТРОЙКИ ==========
+
+    window.openSettingsModal = function() {
+        const modal = document.getElementById('settings-modal');
+        if (modal) modal.classList.remove('hidden');
+        loadSettingsValues();
+    };
+
+    window.closeSettingsModal = function() {
+        const modal = document.getElementById('settings-modal');
+        if (modal) modal.classList.add('hidden');
+    };
+
+    window.switchSettingsTab = function(tab) {
+        const tabs = ['general', 'performance', 'about'];
+        tabs.forEach(t => {
+            const content = document.getElementById(`tab-${t}-content`);
+            if (content) content.classList.add('hidden');
+            const btn = document.getElementById(`tab-${t}`);
+            if (btn) {
+                btn.classList.remove('bg-primary/10', 'text-primary');
+                btn.classList.add('text-gray-600', 'dark:text-gray-400');
+            }
+        });
+
+        const activeContent = document.getElementById(`tab-${tab}-content`);
+        if (activeContent) activeContent.classList.remove('hidden');
+        const activeBtn = document.getElementById(`tab-${tab}`);
+        if (activeBtn) {
+            activeBtn.classList.add('bg-primary/10', 'text-primary');
+            activeBtn.classList.remove('text-gray-600', 'dark:text-gray-400');
+        }
+    };
+
+    function loadSettingsValues() {
+        // Тема
+        const isDark = document.documentElement.classList.contains('dark');
+        const themeToggleBtn = document.getElementById('theme-toggle-settings');
+        if (themeToggleBtn) {
+            themeToggleBtn.onclick = () => {
+                const newDark = !document.documentElement.classList.contains('dark');
+                if (newDark) {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('theme', 'light');
+                }
+                const themeIcon = document.getElementById('theme-icon');
+                if (themeIcon) themeIcon.innerText = newDark ? 'light_mode' : 'dark_mode';
+            };
+        }
+
+        // Загружаем настройки из БД
+        try {
+            fetch('/api/settings/load')
+                .then(res => res.json())
+                .then(settings => {
+                    console.log('Загружены настройки из БД:', settings);
+
+                    const numThread = settings.num_thread || localStorage.getItem('ollama_num_thread') || '8';
+                    const temperature = settings.temperature || localStorage.getItem('ollama_temperature') || '0.35';
+
+                    const slider = document.getElementById('num_thread_slider');
+                    const input = document.getElementById('num_thread_value');
+                    if (slider) slider.value = numThread;
+                    if (input) input.value = numThread;
+
+                    const tempSlider = document.getElementById('temperature_slider');
+                    const tempInput = document.getElementById('temperature_value');
+                    if (tempSlider) tempSlider.value = temperature;
+                    if (tempInput) tempInput.value = temperature;
+                })
+                .catch(err => {
+                    console.warn('Не удалось загрузить настройки из БД, используем localStorage:', err);
+                    // fallback на localStorage
+                    const savedThreads = localStorage.getItem('ollama_num_thread');
+                    if (savedThreads) {
+                        const slider = document.getElementById('num_thread_slider');
+                        const input = document.getElementById('num_thread_value');
+                        if (slider) slider.value = savedThreads;
+                        if (input) input.value = savedThreads;
+                    }
+
+                    const savedTemp = localStorage.getItem('ollama_temperature');
+                    if (savedTemp) {
+                        const slider = document.getElementById('temperature_slider');
+                        const input = document.getElementById('temperature_value');
+                        if (slider) slider.value = savedTemp;
+                        if (input) input.value = savedTemp;
+                    }
+                });
+        } catch (e) {
+            console.error('Ошибка загрузки настроек:', e);
+        }
+
+        // Обработчики слайдеров
+        const threadSlider = document.getElementById('num_thread_slider');
+        const threadInput = document.getElementById('num_thread_value');
+        if (threadSlider && threadInput) {
+            threadSlider.oninput = () => { threadInput.value = threadSlider.value; };
+            threadInput.onchange = () => { threadSlider.value = threadInput.value; };
+        }
+
+        const tempSlider = document.getElementById('temperature_slider');
+        const tempInput = document.getElementById('temperature_value');
+        if (tempSlider && tempInput) {
+            tempSlider.oninput = () => { tempInput.value = tempSlider.value; };
+            tempInput.onchange = () => { tempSlider.value = tempInput.value; };
+        }
+    }
+
+    window.applyPerformanceSettings = async function() {
+        const numThread = document.getElementById('num_thread_value').value;
+        const temperature = document.getElementById('temperature_value').value;
+
+        localStorage.setItem('ollama_num_thread', numThread);
+        localStorage.setItem('ollama_temperature', temperature);
+
+        try {
+            const response = await fetch('/api/settings/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    num_thread: parseInt(numThread, 10),
+                    temperature: parseFloat(temperature)
+                })
+            });
+
+            if (response.ok) {
+                alert(`Настройки сохранены в БД!\nnum_thread: ${numThread}\ntemperature: ${temperature}`);
+            } else {
+                const error = await response.text();
+                alert(`Ошибка сохранения в БД: ${error}`);
+            }
+        } catch (error) {
+            console.error('Ошибка отправки настроек:', error);
+            alert(`Ошибка соединения с сервером: ${error.message}`);
+        }
+    };
+
+    window.showTerms = function() {
+        document.getElementById('terms-modal').classList.remove('hidden');
+    };
+
+    window.closeTermsModal = function() {
+        document.getElementById('terms-modal').classList.add('hidden');
+    };
+
+    window.showPrivacy = function() {
+        document.getElementById('privacy-modal').classList.remove('hidden');
+    };
+
+    window.closePrivacyModal = function() {
+        document.getElementById('privacy-modal').classList.add('hidden');
+    };
+
+    window.showLicenses = function() {
+        alert("Используемые библиотеки:\n- Spring Boot\n- Ollama\n- Tika\n- PDFBox\n- JGit\n- Tailwind CSS\n- Material Icons");
+    };
+
+    // Обработчик кнопки шестерёнки
+    const settingsBtn = document.getElementById('settings-gear-btn');
+    if (settingsBtn) {
+        settingsBtn.onclick = openSettingsModal;
+    }
+
+    // Закрытие модальных окон по клику вне
+    const modals = ['settings-modal', 'terms-modal', 'privacy-modal'];
+    modals.forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.add('hidden');
+            });
+        }
+    });
 
 
 })();
