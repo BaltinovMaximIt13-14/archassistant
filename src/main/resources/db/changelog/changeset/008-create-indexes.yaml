@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-create-indexes
+      author: archassistant
+      changes:
+        - createIndex:
+            indexName: idx_document_chat
+            tableName: documents
+            columns:
+              - column:
+                  name: chat_id
+        - createIndex:
+            indexName: idx_message_chat
+            tableName: messages
+            columns:
+              - column:
+                  name: chat_id
+        - createIndex:
+            indexName: idx_chunk_document
+            tableName: document_chunks
+            columns:
+              - column:
+                  name: document_id
+        - createIndex:
+            indexName: idx_knowledge_file_source
+            tableName: knowledge_files
+            columns:
+              - column:
+                  name: source_id
+        - createIndex:
+            indexName: idx_knowledge_content_file
+            tableName: knowledge_contents
+            columns:
+              - column:
+                  name: file_id

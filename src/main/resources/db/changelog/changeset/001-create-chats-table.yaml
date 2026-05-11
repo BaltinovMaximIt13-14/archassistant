@@ -1,0 +1,28 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-chats-table
+      author: archassistant
+      changes:
+        - createTable:
+            tableName: chats
+            remarks: "Таблица чатов"
+            columns:
+              - column:
+                  name: chat_id
+                  type: UUID
+                  remarks: "Идентификатор чата"
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  remarks: "Название чата"
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  remarks: "Дата создания"
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  remarks: "Дата обновления"

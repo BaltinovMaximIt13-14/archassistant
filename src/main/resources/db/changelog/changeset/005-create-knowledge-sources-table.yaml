@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-create-knowledge-sources-table
+      author: archassistant
+      changes:
+        - createTable:
+            tableName: knowledge_sources
+            remarks: "Таблица источников знаний"
+            columns:
+              - column:
+                  name: source_id
+                  type: UUID
+                  remarks: "Идентификатор источника"
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: repository_url
+                  type: VARCHAR(255)
+                  remarks: "URL репозитория"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: branch
+                  type: VARCHAR(100)
+                  remarks: "Ветка репозитория"
+              - column:
+                  name: local_path
+                  type: VARCHAR(255)
+                  remarks: "Локальный путь"
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: "Дата создания"
+              - column:
+                  name: last_sync
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: "Дата последней синхронизации"

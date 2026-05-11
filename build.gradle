@@ -28,7 +28,7 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-ollama-spring-boot-starter'
     implementation 'org.springframework.ai:spring-ai-pgvector-store-spring-boot-starter'
 
-    // PostgreSQL
+    // PostgresSQL
     runtimeOnly 'org.postgresql:postgresql'
 
     // Git operations (JGit)
@@ -54,6 +54,9 @@ dependencies {
 
     // Для PDF (PDFBox)
     implementation 'org.apache.pdfbox:pdfbox:3.0.2'
+
+    // Миграции
+    implementation 'org.liquibase:liquibase-core'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
