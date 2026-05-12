@@ -682,3 +682,76 @@ html:not(.dark) .chat-item:hover {
     border-color: #e5e7eb !important;
 }
 
+#tab-performance .material-symbols-outlined {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+#tab-performance {
+    display: flex;
+    align-items: center;
+}
+
+/* Кастомное уведомление */
+#custom-toast {
+    transition: all 0.3s ease;
+}
+
+#custom-toast.opacity-0 {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+}
+
+#custom-toast.opacity-100 {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+/* Анимация для вкладок в настройках */
+#tab-general-content,
+#tab-language-content,
+#tab-performance-content,
+#tab-about-content {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Анимация для элементов внутри вкладок */
+#tab-general-content > div,
+#tab-language-content > div,
+#tab-performance-content > div,
+#tab-about-content > div {
+    animation: slideIn 0.3s ease-out;
+    animation-fill-mode: both;
+}
+
+#tab-general-content > div:nth-child(1) { animation-delay: 0.05s; }
+#tab-general-content > div:nth-child(2) { animation-delay: 0.1s; }
+
+#tab-performance-content > div:nth-child(1) { animation-delay: 0.05s; }
+#tab-performance-content > div:nth-child(2) { animation-delay: 0.1s; }
+#tab-performance-content > div:nth-child(3) { animation-delay: 0.15s; }
+
+#tab-about-content > div:nth-child(1) { animation-delay: 0.05s; }
+#tab-about-content > div:nth-child(2) { animation-delay: 0.1s; }
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
