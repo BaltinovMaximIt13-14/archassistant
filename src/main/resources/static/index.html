@@ -104,19 +104,15 @@
 <main class="flex-1 flex flex-col bg-surface-container-lowest main-bg">
     <header class="h-16 border-b border-outline-variant flex items-center justify-between px-8 header-bg">
         <div class="flex items-center gap-4">
-            <!-- Кнопка сворачивания сайдбара -->
             <button id="toggle-sidebar-btn" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-gray-400 transition-all" title="Свернуть панель">
                 <span class="material-symbols-outlined" id="sidebar-toggle-icon">menu_open</span>
             </button>
             <div id="active-chat-title" class="font-headline font-bold text-gray-400">Выберите чат в меню</div>
         </div>
-        <!-- Правая часть шапки -->
         <div class="flex items-center gap-4">
-            <!-- Кнопка настроек -->
             <button id="settings-gear-btn" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-gray-400 transition-all" title="Настройки">
                 <span class="material-symbols-outlined">settings</span>
             </button>
-            <!-- Кнопка показа панели результатов -->
             <button id="show-validation-btn" onclick="showValidationPanel()" class="hidden w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-primary transition-all" title="Показать результаты проверки">
                 <span class="material-symbols-outlined">verified</span>
             </button>
@@ -129,38 +125,80 @@
         </div>
     </header>
 
-    <div id="chat-window" class="flex-1 overflow-y-auto p-8 space-y-8"></div>
-
-    <div class="p-6 input-area-container">
-        <div id="drop-zone" class="hidden max-w-4xl mx-auto mb-3 p-6 border-2 border-dashed border-primary rounded-2xl bg-surface-container-high/80 text-center transition-all">
-            <span class="material-symbols-outlined text-4xl text-primary mb-2">cloud_upload</span>
-            <p class="text-sm text-gray-400">Перетащите файл сюда или <label class="text-primary cursor-pointer underline">выберите на компьютере<input type="file" id="file-input-drop" accept=".pdf,.docx,.doc,.txt,.md,.odt,.html,.xml,.json,.yaml,.yml,.java,.py,.js,.ts,.png,.jpg,.jpeg,.tif,.tiff,.bmp" style="display: none;"></label></p>
+    <!-- Пустое состояние с логотипом и центрированным полем -->
+    <div id="empty-state" class="flex-1 flex flex-col items-center justify-center">
+        <div class="text-center mb-12">
+            <div class="mx-auto mb-6 flex items-center justify-center">
+                <img src="/logo.png" alt="Logo" class="w-24 h-24">
+            </div>
+            <h1 class="text-4xl font-headline font-bold bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent mb-3">
+                ER-Assistant
+            </h1>
+            <p class="text-gray-500 dark:text-gray-400 text-base">Помощник ИТ-архитектора</p>
         </div>
-        <div class="max-w-4xl mx-auto bg-surface-container-high rounded-3xl border border-outline-variant p-2 shadow-2xl input-box">
-            <div class="flex items-end gap-2 p-1">
-                <textarea id="user-input" rows="1" placeholder="Введите описание задачи или прикрепите файл..." class="flex-1 bg-transparent border-none text-white focus:ring-0 resize-none py-3 px-4 text-sm"></textarea>
-                <div class="flex gap-2 pb-1 pr-1 items-center">
-                    <label id="attach-btn" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-gray-400 cursor-pointer transition-all" title="Прикрепить файл">
-                        <span class="material-symbols-outlined">attach_file</span>
-                        <input type="file" id="file-input" accept=".pdf,.docx,.doc,.txt,.md,.odt,.html,.xml,.json,.yaml,.yml,.java,.py,.js,.ts,.png,.jpg,.jpeg,.tif,.tiff,.bmp" style="display: none;">
-                    </label>
-                    <div id="file-indicator" class="hidden px-3 py-1 bg-primary/20 text-primary text-xs rounded-full flex items-center gap-1 max-w-[150px]">
-                        <span class="material-symbols-outlined text-sm">description</span>
-                        <span id="file-name" class="truncate"></span>
-                        <button id="clear-file" class="ml-1 hover:text-red-400">&times;</button>
+        <!-- Центрированное поле ввода -->
+        <div class="w-full max-w-3xl mx-auto px-4 transition-all duration-500" id="centered-input-container">
+            <div class="bg-surface-container-high rounded-3xl border border-outline-variant p-2 shadow-2xl input-box">
+                <div class="flex items-end gap-2 p-1">
+                    <textarea id="user-input-centered" rows="1" placeholder="Задайте вопрос или опишите задачу..." class="flex-1 bg-transparent border-none focus:ring-0 resize-none py-3 px-4 text-sm min-h-[52px] max-h-[200px]" style="color: inherit;"></textarea>
+                    <div class="flex gap-2 pb-1 pr-1 items-center">
+                        <label id="attach-btn-centered" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-gray-400 cursor-pointer transition-all">
+                            <span class="material-symbols-outlined">attach_file</span>
+                            <input type="file" id="file-input-centered" accept=".pdf,.docx,.doc,.txt,.md,.odt,.html,.xml,.json,.yaml,.yml,.java,.py,.js,.ts,.png,.jpg,.jpeg,.tif,.tiff,.bmp" style="display: none;">
+                        </label>
+                        <!-- ИНДИКАТОР ФАЙЛА ДЛЯ ЦЕНТРИРОВАННОГО ПОЛЯ -->
+                        <div id="file-indicator-centered" class="hidden px-3 py-1 bg-primary/20 text-primary text-xs rounded-full flex items-center gap-1 max-w-[150px]">
+                            <span class="material-symbols-outlined text-sm">description</span>
+                            <span id="file-name-centered" class="truncate"></span>
+                            <button id="clear-file-centered" class="ml-1 hover:text-red-400">&times;</button>
+                        </div>
+                        <button onclick="validateSolutionCentered()" class="px-4 h-10 rounded-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium transition-all">
+                            <span class="material-symbols-outlined text-lg">verified</span>
+                            Проверить
+                        </button>
+                        <button onclick="handleActionCentered()" class="w-10 h-10 bg-primary rounded-full flex items-center justify-center hover:scale-105 transition-all">
+                            <span class="material-symbols-outlined text-white">send</span>
+                        </button>
                     </div>
-                    <button onclick="validateSolution()" class="px-4 h-10 rounded-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium transition-all active:scale-95">
-                        <span class="material-symbols-outlined text-lg">verified</span>
-                        Проверить
-                    </button>
-                    <button onclick="handleAction('/api/ai/stream', 'message')" class="w-10 h-10 bg-primary rounded-full flex items-center justify-center hover:scale-105 transition-all">
-                        <span class="material-symbols-outlined text-white">send</span>
-                    </button>
                 </div>
             </div>
+            <div class="text-center text-[10px] text-gray-500 mt-3">
+                Сгенерировано ИИ · Информация может быть неточной
+            </div>
         </div>
-        <div id="ai-disclaimer" class="text-center text-[10px] text-gray-500 mt-3">
-            Сгенерировано ИИ · Информация может быть неточной
+    </div>
+
+    <!-- Режим чата (изначально скрыт) -->
+    <div id="chat-mode" class="flex-1 flex flex-col hidden min-h-0">
+        <div id="chat-window" class="flex-1 overflow-y-auto p-8 space-y-8"></div>
+        <div class="p-6 input-area-container">
+            <div id="drop-zone" class="hidden max-w-4xl mx-auto mb-3 p-6 border-2 border-dashed border-primary rounded-2xl bg-surface-container-high/80 text-center transition-all">
+                <span class="material-symbols-outlined text-4xl text-primary mb-2">cloud_upload</span>
+                <p class="text-sm text-gray-400">Перетащите файл сюда или <label class="text-primary cursor-pointer underline">выберите на компьютере<input type="file" id="file-input-drop" accept=".pdf,.docx,.doc,.txt,.md,.odt,.html,.xml,.json,.yaml,.yml,.java,.py,.js,.ts,.png,.jpg,.jpeg,.tif,.tiff,.bmp" style="display: none;"></label></p>
+            </div>
+            <div class="max-w-4xl mx-auto bg-surface-container-high rounded-3xl border border-outline-variant p-2 shadow-2xl">
+                <div class="flex items-end gap-2 p-1">
+                    <textarea id="user-input" rows="1" placeholder="Введите описание задачи или прикрепите файл..." class="flex-1 bg-transparent border-none focus:ring-0 resize-none py-3 px-4 text-sm" style="color: inherit;"></textarea>
+                    <div class="flex gap-2 pb-1 pr-1 items-center">
+                        <label id="attach-btn" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-gray-400 cursor-pointer transition-all">
+                            <span class="material-symbols-outlined">attach_file</span>
+                            <input type="file" id="file-input" accept=".pdf,.docx,.doc,.txt,.md,.odt,.html,.xml,.json,.yaml,.yml,.java,.py,.js,.ts,.png,.jpg,.jpeg,.tif,.tiff,.bmp" style="display: none;">
+                        </label>
+                        <div id="file-indicator" class="hidden px-3 py-1 bg-primary/20 text-primary text-xs rounded-full flex items-center gap-1 max-w-[150px]">
+                            <span class="material-symbols-outlined text-sm">description</span>
+                            <span id="file-name" class="truncate"></span>
+                            <button id="clear-file" class="ml-1 hover:text-red-400">&times;</button>
+                        </div>
+                        <button onclick="validateSolution()" class="px-4 h-10 rounded-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium transition-all">
+                            <span class="material-symbols-outlined text-lg">verified</span>
+                            Проверить
+                        </button>
+                        <button onclick="handleAction('/api/ai/stream', 'message')" class="w-10 h-10 bg-primary rounded-full flex items-center justify-center hover:scale-105 transition-all">
+                            <span class="material-symbols-outlined text-white">send</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </main>

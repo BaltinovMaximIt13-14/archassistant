@@ -192,7 +192,6 @@
                 chat.classList.add('active-chat');
                 chat.classList.add('bg-[#0054a6]', 'text-white', 'shadow-md');
                 chat.classList.remove('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
-                // Обновляем стиль кнопки меню
                 const menuBtn = chat.querySelector('.chat-menu-btn');
                 if (menuBtn) {
                     menuBtn.classList.add('text-white/70', 'hover:text-white');
@@ -201,7 +200,6 @@
                 chat.classList.remove('active-chat');
                 chat.classList.remove('bg-[#0054a6]', 'text-white', 'shadow-md');
                 chat.classList.add('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
-                // Обновляем стиль кнопки меню
                 const menuBtn = chat.querySelector('.chat-menu-btn');
                 if (menuBtn) {
                     menuBtn.classList.remove('text-white/70', 'hover:text-white');
@@ -214,16 +212,39 @@
             const res = await fetch(`/api/messages/chat/${id}`);
             const messages = await res.json();
             let lastValidationReport = null;
-            messages.forEach(msg => {
-                appendMessage(msg.role, msg.content);
-                if (msg.role === 'assistant' && looksLikeValidationReport(msg.content)) {
-                    lastValidationReport = msg.content;
+
+            if (messages.length === 0) {
+                // Если нет сообщений - показываем пустое состояние
+                const emptyState = document.getElementById('empty-state');
+                const chatMode = document.getElementById('chat-mode');
+                if (emptyState && chatMode) {
+                    emptyState.classList.remove('hidden');
+                    emptyState.style.opacity = '1';
+                    chatMode.classList.add('hidden');
                 }
-            });
-            if (lastValidationReport) {
-                parseAndDisplayValidationResults(lastValidationReport, { openPanel: false });
             } else {
-                resetValidationPanel();
+                // Если есть сообщения - переключаем в режим чата
+                const emptyState = document.getElementById('empty-state');
+                const chatMode = document.getElementById('chat-mode');
+                if (emptyState && chatMode) {
+                    emptyState.classList.add('hidden');
+                    chatMode.classList.remove('hidden');
+                    chatMode.style.opacity = '1';
+                }
+
+                // Загружаем сообщения
+                messages.forEach(msg => {
+                    appendMessage(msg.role, msg.content);
+                    if (msg.role === 'assistant' && looksLikeValidationReport(msg.content)) {
+                        lastValidationReport = msg.content;
+                    }
+                });
+
+                if (lastValidationReport) {
+                    parseAndDisplayValidationResults(lastValidationReport, { openPanel: false });
+                } else {
+                    resetValidationPanel();
+                }
             }
         } catch (e) {
             console.error('Ошибка загрузки сообщений:', e);
@@ -1128,24 +1149,60 @@
 
     window.createNewChat = async function() {
         const lang = localStorage.getItem('language') || 'ru';
-        const defaultTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
 
-        try {
-            const res = await fetch('/api/chats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: defaultTitle })
-            });
-            const chat = await res.json();
-            selectChat(chat.id, chat.title);
+        // Сбрасываем текущий чат (делаем вид, что чата нет)
+        currentChatId = null;
 
-            const message = lang === 'ru' ? '✅ Чат создан' : '✅ Chat created';
-            showToast(message, 1500);
-        } catch (e) {
-            console.error('Ошибка создания чата:', e);
-            const message = lang === 'ru' ? '❌ Не удалось создать чат' : '❌ Failed to create chat';
-            showToast(message);
+        // Очищаем окно с сообщениями
+        if (chatWindow) chatWindow.innerHTML = '';
+
+        // Сбрасываем панель валидации
+        resetValidationPanel();
+
+        // Сбрасываем заголовок
+        if (titleEl) titleEl.innerText = lang === 'ru' ? 'Новый чат' : 'New chat';
+
+        // Показываем пустое состояние (центрированный логотип и поле ввода)
+        const emptyState = document.getElementById('empty-state');
+        const chatMode = document.getElementById('chat-mode');
+
+        if (emptyState && chatMode) {
+            emptyState.classList.remove('hidden');
+            emptyState.style.opacity = '1';
+            chatMode.classList.add('hidden');
+
+            // Очищаем центрированное поле ввода
+            const centeredInput = document.getElementById('user-input-centered');
+            if (centeredInput) {
+                centeredInput.value = '';
+                centeredInput.style.height = 'auto';
+                centeredInput.placeholder = lang === 'ru' ? 'Задайте вопрос или опишите задачу...' : 'Ask a question or describe the task...';
+                centeredInput.focus();
+            }
+
+            // Очищаем прикреплённый файл в центрированном поле
+            const centeredFileInput = document.getElementById('file-input-centered');
+            if (centeredFileInput) centeredFileInput.value = '';
         }
+
+        // Убираем выделение со всех чатов в списке
+        const allChats = document.querySelectorAll('.chat-item');
+        allChats.forEach(chat => {
+            chat.classList.remove('active-chat', 'bg-[#0054a6]', 'text-white', 'shadow-md');
+            chat.classList.add('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
+        });
+
+        // Очищаем обычное поле ввода на всякий случай
+        if (inputField) {
+            inputField.value = '';
+            inputField.style.height = 'auto';
+        }
+
+        // Показываем уведомление
+        const message = lang === 'ru' ? '🆕 Начните новый диалог' : '🆕 Start a new conversation';
+        showToast(message, 1500);
+        // Очищаем центрированный файл
+        clearCenteredAttachedFile();
     };
 
     // Enter в модальном окне создания чата
@@ -1868,7 +1925,8 @@
                 'source-path': 'Локальный путь (опционально)',
                 'add-source-title': 'Добавить источник знаний',
                 'ai-disclaimer': 'Сгенерировано ИИ · Информация может быть неточной',
-                'logo-title': 'ЭР-Ассистент'
+                'logo-title': 'ЭР-Ассистент',
+                'app-name': 'ЭР-Ассистент'
             },
             en: {
                 'new-chat': 'New chat',
@@ -1920,17 +1978,31 @@
                 'source-path': 'Local path (optional)',
                 'add-source-title': 'Add knowledge source',
                 'ai-disclaimer': 'Generated by AI · Information may be inaccurate',
-                'logo-title': 'ER-Assistant'
+                'logo-title': 'ER-Assistant',
+                'app-name': 'ER-Assistant'
             }
         };
 
         const t = translations[lang] || translations.ru;
 
 
-        // Логотип / название в сайдбаре
-        const logoTitle = document.getElementById('logo-title');
-        if (logoTitle) {
-            logoTitle.textContent = t['logo-title'];
+
+        // Обновление ER-Assistant в центрированном режиме
+        const centeredLogoTitle = document.querySelector('#empty-state h1');
+        if (centeredLogoTitle) {
+            centeredLogoTitle.textContent = t['app-name'];
+        }
+
+// Обновление логотипа в сайдбаре
+        const sidebarLogoTitle = document.getElementById('logo-title');
+        if (sidebarLogoTitle) {
+            sidebarLogoTitle.textContent = t['logo-title'];
+        }
+
+// Обновление текста в хедере если есть
+        const headerLogo = document.querySelector('.logo-text');
+        if (headerLogo && headerLogo !== sidebarLogoTitle) {
+            headerLogo.textContent = t['logo-title'];
         }
 
         // Подпись "Сгенерировано ИИ"
@@ -2191,15 +2263,11 @@
         }
     }
 
-    // Инициализация языка
     function initLanguage() {
-        const langSelect = document.getElementById('language-select');
-        if (langSelect) {
-            langSelect.onchange = () => {
-                saveLanguage();
-            };
-        }
-        loadLanguage();
+        // Загружаем сохранённый язык
+        const savedLang = localStorage.getItem('language') || 'ru';
+        applyLanguage(savedLang);
+
     }
 
     initLanguage();
@@ -2260,6 +2328,8 @@
 
                 // Сохраняем язык
                 localStorage.setItem('language', lang);
+
+                // Применяем язык ко всему интерфейсу
                 applyLanguage(lang);
 
                 // Показываем уведомление о перезагрузке
@@ -2291,6 +2361,9 @@
             const checkIcon = activeOption.querySelector('.material-symbols-outlined');
             if (checkIcon) checkIcon.classList.remove('opacity-0');
         }
+
+        // Применяем сохранённый язык при загрузке страницы
+        applyLanguage(savedLang);
     }
 
     // Инициализация кастомного селекта языка
@@ -2575,6 +2648,242 @@
         renameModal.addEventListener('click', (e) => {
             if (e.target === renameModal) {
                 closeRenameModal();
+            }
+        });
+    }
+
+    window.handleActionCentered = async function() {
+        const input = document.getElementById('user-input-centered');
+        const text = input?.value.trim();
+
+        // Если есть файл, отправляем как проверку (потому что файл)
+        if (centeredUploadedFile) {
+            await validateSolutionCentered();
+            return;
+        }
+
+        if (!text || isLoading) return;
+
+        // Если нет активного чата, создаём новый
+        if (!currentChatId) {
+            let chatTitle = text.slice(0, 50);
+            if (chatTitle.length === 50) chatTitle += '...';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                await loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать чат' : '❌ Failed to create chat';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
+        // Переключаем в режим чата БЕЗ ПАНЕЛИ
+        switchToChatMode(false);
+
+        // Копируем текст в обычное поле ввода
+        const mainInput = document.getElementById('user-input');
+        if (mainInput) {
+            mainInput.value = text;
+            mainInput.style.height = 'auto';
+        }
+
+        // Очищаем центрированное поле
+        input.value = '';
+        input.style.height = 'auto';
+
+        // Вызываем обычную отправку
+        await handleAction('/api/ai/stream', 'message');
+    };
+
+    window.validateSolutionCentered = async function() {
+        const input = document.getElementById('user-input-centered');
+        const comment = input?.value.trim() || '';
+
+        // Получаем файл из центрированной переменной
+        const hasFile = centeredUploadedFile !== null;
+
+        // Если нет сообщения и нет файла, показываем уведомление
+        if (!comment && !hasFile) {
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? 'Введите задачу или прикрепите файл' : 'Enter a task or attach a file';
+            showToast(message);
+            return;
+        }
+
+        // Если нет активного чата, создаём новый
+        if (!currentChatId) {
+            let chatTitle = '';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            if (comment) {
+                chatTitle = comment.slice(0, 50);
+                if (chatTitle.length === 50) chatTitle += '...';
+            } else if (hasFile && centeredUploadedFile) {
+                chatTitle = centeredUploadedFile.name.replace(/\.[^/.]+$/, '');
+                if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
+            } else {
+                chatTitle = lang === 'ru' ? 'Проверка решения' : 'Solution check';
+            }
+
+            if (!chatTitle || chatTitle.trim() === '') {
+                chatTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
+            }
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                await loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать проект' : '❌ Failed to create project';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
+        // Переключаем в режим чата С ПАНЕЛЬЮ
+        switchToChatMode(true);
+
+        // Копируем комментарий в обычное поле
+        const mainInput = document.getElementById('user-input');
+        if (mainInput && comment) {
+            mainInput.value = comment;
+            mainInput.style.height = 'auto';
+        }
+
+        // Копируем файл из центрированного поля в обычное
+        if (hasFile && centeredUploadedFile) {
+            const file = centeredUploadedFile;
+            const mainFileInput = document.getElementById('file-input');
+            if (mainFileInput) {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                mainFileInput.files = dataTransfer.files;
+                handleFileSelection(file);
+            }
+        }
+
+        // Очищаем центрированное поле и файл
+        input.value = '';
+        input.style.height = 'auto';
+        clearCenteredAttachedFile();
+
+        // Вызываем обычную проверку
+        await validateSolution();
+    };
+    function switchToChatMode(showValidationPanelFlag = false) {
+        const emptyState = document.getElementById('empty-state');
+        const chatMode = document.getElementById('chat-mode');
+
+        if (emptyState && chatMode && !chatMode.classList.contains('hidden')) {
+            return;
+        }
+
+        if (emptyState && chatMode) {
+            emptyState.style.opacity = '0';
+            setTimeout(() => {
+                emptyState.classList.add('hidden');
+                chatMode.classList.remove('hidden');
+                chatMode.style.opacity = '1';
+
+                if (showValidationPanelFlag === true) {
+                    setTimeout(() => {
+                        showValidationPanel();
+                    }, 300);
+                }
+            }, 150);
+        }
+    }
+
+    // DOM элементы для центрированного режима
+    const centeredInput = document.getElementById('user-input-centered');
+    const centeredFileInput = document.getElementById('file-input-centered');
+    const centeredAttachBtn = document.getElementById('attach-btn-centered');
+    const centeredFileIndicator = document.getElementById('file-indicator-centered');
+    const centeredFileNameSpan = document.getElementById('file-name-centered');
+    const centeredClearFileBtn = document.getElementById('clear-file-centered');
+
+    // Переменная для хранения файла в центрированном режиме
+    let centeredUploadedFile = null;
+
+    function handleCenteredFileSelection(file) {
+        centeredUploadedFile = file;
+        if (centeredFileNameSpan) centeredFileNameSpan.textContent = file.name;
+        if (centeredFileIndicator) centeredFileIndicator.classList.remove('hidden');
+        if (centeredInput) centeredInput.placeholder = `Файл "${file.name}" прикреплён. Введите комментарий (необязательно)`;
+    }
+
+    function clearCenteredAttachedFile() {
+        centeredUploadedFile = null;
+        if (centeredFileIndicator) centeredFileIndicator.classList.add('hidden');
+        if (centeredFileNameSpan) centeredFileNameSpan.textContent = '';
+        if (centeredFileInput) centeredFileInput.value = '';
+        if (centeredInput) centeredInput.placeholder = 'Задайте вопрос или опишите задачу...';
+    }
+
+    // Обработчики для центрированного режима
+    if (centeredAttachBtn) {
+        centeredAttachBtn.addEventListener('click', () => centeredFileInput?.click());
+    }
+    if (centeredFileInput) {
+        centeredFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleCenteredFileSelection(e.target.files[0]);
+        });
+    }
+    if (centeredClearFileBtn) {
+        centeredClearFileBtn.addEventListener('click', clearCenteredAttachedFile);
+    }
+
+    // Обработчики для центрированного режима
+    if (centeredAttachBtn) {
+        centeredAttachBtn.addEventListener('click', () => centeredFileInput?.click());
+    }
+    if (centeredFileInput) {
+        centeredFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleCenteredFileSelection(e.target.files[0]);
+        });
+    }
+    if (centeredClearFileBtn) {
+        centeredClearFileBtn.addEventListener('click', clearCenteredAttachedFile);
+    }
+
+    // ========== ОБРАБОТЧИК ENTER ДЛЯ ЦЕНТРИРОВАННОГО ПОЛЯ ==========
+    if (centeredInput) {
+        // Авто-расширение высоты
+        centeredInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        });
+
+        // Отправка по Enter
+        centeredInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                centeredInput.style.height = 'auto';
+                if (centeredUploadedFile) {
+                    validateSolutionCentered();
+                } else {
+                    handleActionCentered();
+                }
             }
         });
     }

@@ -998,5 +998,95 @@ html:not(.dark) .chat-item:not(.active-chat) .chat-menu-btn:hover .material-symb
     }
 }
 
+/* Стили для поля ввода в светлой теме */
+html:not(.dark) #user-input-centered,
+html:not(.dark) #user-input {
+    color: #1f2937 !important;
+    background-color: transparent !important;
+}
+
+html:not(.dark) #user-input-centered::placeholder,
+html:not(.dark) #user-input::placeholder {
+    color: #9ca3af !important;
+}
+
+html:not(.dark) .input-box {
+    background-color: #ffffff !important;
+    border-color: #d1d5db !important;
+}
+
+html:not(.dark) .input-box textarea {
+    color: #1f2937 !important;
+}
+
+html:not(.dark) .input-box textarea::placeholder {
+    color: #9ca3af !important;
+}
+
+/* Убираем фон у логотипа в пустом состоянии */
+#empty-state .mx-auto img {
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+}
+
+/* Исправление для поля ввода в режиме чата при светлой теме */
+html:not(.dark) #chat-mode .input-box {
+    background-color: #ffffff !important;
+    border-color: #d1d5db !important;
+}
+
+html:not(.dark) #chat-mode #user-input {
+    color: #1f2937 !important;
+    background-color: transparent !important;
+}
+
+html:not(.dark) #chat-mode #user-input::placeholder {
+    color: #9ca3af !important;
+}
+
+/* Кнопки в режиме чата при светлой теме */
+html:not(.dark) #chat-mode .bg-primary {
+    background-color: #0054a6 !important;
+    color: white !important;
+    border: 1px solid #d1d5db !important;
+}
+
+html:not(.dark) #chat-mode .bg-green-600 {
+    background-color: #16a34a !important;
+    border: 1px solid #d1d5db !important;
+}
+
+html:not(.dark) #chat-mode .bg-green-600:hover {
+    background-color: #15803d !important;
+}
+
+html:not(.dark) #chat-mode #attach-btn {
+    border: 1px solid #d1d5db !important;
+    background-color: #ffffff !important;
+    color: #6b7280 !important;
+}
+
+html:not(.dark) #chat-mode #attach-btn:hover {
+    background-color: #f3f4f6 !important;
+}
+
+/* Индикатор файла в режиме чата при светлой теме */
+html:not(.dark) #chat-mode #file-indicator {
+    background-color: #e0e7ff !important;
+    color: #0054a6 !important;
+}
+
+html:not(.dark) #chat-mode #clear-file {
+    color: #ef4444 !important;
+}
+
+html:not(.dark) #chat-mode #clear-file:hover {
+    color: #dc2626 !important;
+}
+
+/* Переопределяем bg-surface-container-high для светлой темы */
+html:not(.dark) .bg-surface-container-high {
+    background-color: #ffffff !important;
+}
+
 
 
