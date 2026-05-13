@@ -755,3 +755,248 @@ html:not(.dark) .chat-item:hover {
         transform: translateX(0);
     }
 }
+
+/* Контекстное меню для чатов */
+.chat-context-menu {
+    animation: menuFadeIn 0.15s ease-out;
+    transform-origin: top left;
+}
+
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Кнопка с тремя точками */
+.chat-item .opacity-0 {
+    opacity: 0;
+}
+
+.chat-item:hover .opacity-0 {
+    opacity: 1;
+}
+
+/* Анимация для закреплённых чатов */
+.chat-item .material-symbols-outlined {
+    transition: transform 0.2s;
+}
+
+.chat-item[data-pinned="true"] .material-symbols-outlined:first-child {
+    transform: rotate(45deg);
+}
+
+/* Контекстное меню для чатов */
+.chat-context-menu {
+    animation: menuFadeIn 0.15s ease-out;
+    transform-origin: top left;
+}
+
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Кнопка с тремя точками */
+.chat-item .opacity-0 {
+    opacity: 0;
+}
+
+.chat-item:hover .opacity-0 {
+    opacity: 1;
+}
+
+/* Улучшенная кликабельность чата */
+.chat-item .cursor-pointer {
+    cursor: pointer;
+}
+
+.chat-item {
+    user-select: none;
+}
+
+/* Стили для активного чата в светлой теме */
+html:not(.dark) .chat-item.active-chat {
+    background-color: #0054a6 !important;
+    color: white !important;
+}
+
+html:not(.dark) .chat-item.active-chat .chat-title {
+    color: white !important;
+    font-weight: 600;
+}
+
+html:not(.dark) .chat-item.active-chat .material-symbols-outlined {
+    color: white !important;
+}
+
+/* Стили для активного чата в тёмной теме */
+html.dark .chat-item.active-chat {
+    background-color: #0054a6 !important;
+    color: white !important;
+}
+
+html.dark .chat-item.active-chat .chat-title {
+    color: white !important;
+    font-weight: 600;
+}
+
+/* Улучшенный hover для чатов в светлой теме */
+html:not(.dark) .chat-item:not(.active-chat):hover {
+    background-color: #f0f0f0 !important;
+}
+
+html:not(.dark) .chat-item:not(.active-chat):hover .chat-title {
+    color: #111827 !important;
+}
+
+/* Улучшенный hover для чатов в тёмной теме */
+html.dark .chat-item:not(.active-chat):hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Показываем кнопку при наведении на чат */
+.chat-item:hover .chat-menu-btn {
+    opacity: 1 !important;
+}
+/* Кнопка меню чата - полное отсутствие стилей */
+.chat-menu-btn {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.chat-menu-btn:focus,
+.chat-menu-btn:active,
+.chat-menu-btn:hover {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.chat-menu-btn .material-symbols-outlined {
+    font-size: 18px;
+    transition: color 0.2s ease;
+}
+
+/* Показываем кнопку при наведении на чат */
+.chat-item:hover .chat-menu-btn {
+    opacity: 1 !important;
+}
+
+/* Для активного чата - кнопка всегда видна */
+.chat-item.active-chat .chat-menu-btn {
+    opacity: 1 !important;
+}
+
+/* ТЁМНАЯ ТЕМА - неактивный чат */
+html.dark .chat-item:not(.active-chat) .chat-menu-btn .material-symbols-outlined {
+    color: #6b7280;
+}
+
+html.dark .chat-item:not(.active-chat) .chat-menu-btn:hover .material-symbols-outlined {
+    color: #60a5fa !important;
+}
+
+/* СВЕТЛАЯ ТЕМА - неактивный чат */
+html:not(.dark) .chat-item:not(.active-chat) .chat-menu-btn .material-symbols-outlined {
+    color: #9ca3af;
+}
+
+html:not(.dark) .chat-item:not(.active-chat) .chat-menu-btn:hover .material-symbols-outlined {
+    color: #0054a6 !important;
+}
+
+/* АКТИВНЫЙ ЧАТ - обе темы */
+.chat-item.active-chat .chat-menu-btn .material-symbols-outlined {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.chat-item.active-chat .chat-menu-btn:hover .material-symbols-outlined {
+    color: white !important;
+}
+
+/* Убираем конфликт кликов */
+.chat-item {
+    user-select: none;
+}
+
+.chat-item .chat-menu-btn {
+    position: relative;
+    z-index: 10;
+}
+
+/* Убираем эффект нажатия */
+.chat-menu-btn:active {
+    transform: none;
+}
+
+.chat-menu-btn::before,
+.chat-menu-btn::after {
+    display: none !important;
+}
+
+.chat-menu-btn:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+/* Контекстное меню */
+.chat-context-menu {
+    animation: menuFadeIn 0.15s ease-out;
+    transform-origin: top left;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+}
+
+.chat-menu-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Анимация для модалки удаления */
+#delete-chat-modal .bg-white,
+#delete-chat-modal .dark\:bg-surface-container-high {
+    animation: modalPopIn 0.2s ease-out;
+}
+
+@keyframes modalPopIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+
+

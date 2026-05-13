@@ -124,15 +124,55 @@
             const chats = await res.json();
             const list = document.getElementById('chat-list');
             if (!list) return;
+
+            // Сортируем: закреплённые сверху, затем по дате создания
+            const pinnedChats = chats.filter(c => c.pinned);
+            const unpinnedChats = chats.filter(c => !c.pinned);
+            const sortedChats = [...pinnedChats, ...unpinnedChats];
+
             list.innerHTML = '';
-            chats.forEach(chat => {
+            sortedChats.forEach(chat => {
                 const isActive = currentChatId === chat.id;
                 const div = document.createElement('div');
-                div.className = `p-3 rounded-xl cursor-pointer transition-all flex items-center gap-3 text-sm ${
-                    isActive ? 'bg-[#0054a6] text-white shadow-md' : 'text-gray-500 dark:text-white hover:bg-black/5 dark:hover:bg-white/5'
-                }`;
-                div.innerHTML = `<span class="material-symbols-outlined text-[18px]">chat</span><span class="truncate">${chat.title || 'Без названия'}</span>`;
-                div.onclick = () => selectChat(chat.id, chat.title);
+
+                // Базовые классы для контейнера чата
+                let className = 'chat-item group p-3 rounded-xl transition-all flex items-center justify-between text-sm cursor-pointer ';
+
+                if (isActive) {
+                    className += 'bg-[#0054a6] text-white shadow-md active-chat';
+                } else {
+                    className += 'text-gray-500 dark:text-white hover:bg-black/5 dark:hover:bg-white/5';
+                }
+
+                div.className = className;
+                div.setAttribute('data-chat-id', chat.id);
+
+                // Вся строка чата кликабельна для выбора чата
+                div.onclick = (e) => {
+                    e.stopPropagation();
+                    selectChat(chat.id, chat.title);
+                };
+
+                // Экранируем标题 для безопасности
+                const safeTitle = escapeHtml(chat.title || 'Без названия').replace(/'/g, "\\'");
+
+                // Контент внутри
+                div.innerHTML = `
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <span class="material-symbols-outlined text-[18px] flex-shrink-0">${chat.pinned ? 'push_pin' : 'chat'}</span>
+                    <span class="truncate chat-title flex-1">${safeTitle}</span>
+                </div>
+                <div class="flex-shrink-0">
+                    <button class="chat-menu-btn" 
+                            style="background: transparent !important; border: none !important; padding: 0; margin: 0; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0;"
+                            onmouseenter="this.style.opacity='1'"
+                            onmouseleave="this.style.opacity='0'"
+                            onclick="event.stopPropagation(); window.showChatMenu(event, '${chat.id}', '${safeTitle}')">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: ${isActive ? 'rgba(255,255,255,0.8)' : '#9ca3af'};">more_vert</span>
+                    </button>
+                </div>
+            `;
+
                 list.appendChild(div);
             });
         } catch (e) {
@@ -144,6 +184,32 @@
         currentChatId = id;
         if (titleEl) titleEl.innerText = title;
         if (chatWindow) chatWindow.innerHTML = '';
+
+        // Обновляем активный класс во всех чатах
+        const allChats = document.querySelectorAll('.chat-item');
+        allChats.forEach(chat => {
+            if (chat.getAttribute('data-chat-id') == id) {
+                chat.classList.add('active-chat');
+                chat.classList.add('bg-[#0054a6]', 'text-white', 'shadow-md');
+                chat.classList.remove('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
+                // Обновляем стиль кнопки меню
+                const menuBtn = chat.querySelector('.chat-menu-btn');
+                if (menuBtn) {
+                    menuBtn.classList.add('text-white/70', 'hover:text-white');
+                }
+            } else {
+                chat.classList.remove('active-chat');
+                chat.classList.remove('bg-[#0054a6]', 'text-white', 'shadow-md');
+                chat.classList.add('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
+                // Обновляем стиль кнопки меню
+                const menuBtn = chat.querySelector('.chat-menu-btn');
+                if (menuBtn) {
+                    menuBtn.classList.remove('text-white/70', 'hover:text-white');
+                    menuBtn.classList.add('text-gray-400', 'hover:text-white');
+                }
+            }
+        });
+
         try {
             const res = await fetch(`/api/messages/chat/${id}`);
             const messages = await res.json();
@@ -854,15 +920,34 @@
     window.validateSolution = async function() {
         const comment = inputField?.value.trim() || '';
 
+        // Если нет активного чата, создаём новый
         if (!currentChatId) {
-            const shouldCreate = confirm('Проект не выбран. Создать новый?');
-            if (!shouldCreate) return;
+            // Генерируем название из комментария или файла
+            let chatTitle = '';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            if (comment) {
+                // Берём первые 50 символов из комментария
+                chatTitle = comment.slice(0, 50);
+                if (chatTitle.length === 50) chatTitle += '...';
+            } else if (uploadedFile) {
+                // Берём имя файла без расширения
+                chatTitle = uploadedFile.name.replace(/\.[^/.]+$/, '');
+                if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
+            } else {
+                chatTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
+            }
+
+            // Если название пустое, ставим дефолтное
+            if (!chatTitle || chatTitle.trim() === '') {
+                chatTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
+            }
+
             try {
-                const title = comment || uploadedFile?.name || 'Новый проект';
                 const res = await fetch('/api/chats', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title: title.slice(0, 50) })
+                    body: JSON.stringify({ title: chatTitle })
                 });
                 const chat = await res.json();
                 currentChatId = chat.id;
@@ -870,12 +955,14 @@
                 if (chatWindow) chatWindow.innerHTML = '';
                 loadChats();
             } catch (e) {
-                alert('Не удалось создать проект');
+                const message = lang === 'ru' ? '❌ Не удалось создать проект' : '❌ Failed to create project';
+                showToast(message);
                 console.error(e);
                 return;
             }
         }
 
+        // Загрузка файла, если есть
         if (uploadedFile && !uploadedDocumentId) {
             try {
                 appendMessage('user', `📎 Загрузка файла "${uploadedFile.name}"...`);
@@ -890,11 +977,14 @@
                 uploadedDocumentId = uploadData.documentId;
                 chatWindow?.lastChild?.remove();
             } catch (err) {
-                alert(`Ошибка загрузки файла: ${err.message}`);
+                const lang = localStorage.getItem('language') || 'ru';
+                const message = lang === 'ru' ? `❌ Ошибка загрузки файла: ${err.message}` : `❌ File upload error: ${err.message}`;
+                showToast(message);
                 return;
             }
         }
 
+        // Формируем текст сообщения пользователя
         let userDisplayText = comment || 'Проверка решения';
         if (uploadedFile) {
             userDisplayText = `📄 **Файл:** ${uploadedFile.name}` + (comment ? `\n\n**Комментарий:** ${comment}` : '');
@@ -906,6 +996,7 @@
             inputField.style.height = 'auto';
         }
 
+        // Сохраняем сообщение в БД
         try {
             await fetch('/api/messages', {
                 method: 'POST',
@@ -952,7 +1043,9 @@
                 });
                 parseAndDisplayValidationResults(fullText);
             } else {
-                renderAssistantMarkdown(aiContainer, '⚠️ **Ошибка:** не удалось получить ответ от сервера.');
+                const lang = localStorage.getItem('language') || 'ru';
+                const errorText = lang === 'ru' ? '⚠️ **Ошибка:** не удалось получить ответ от сервера.' : '⚠️ **Error:** failed to get response from server.';
+                renderAssistantMarkdown(aiContainer, errorText);
             }
             clearAttachedFile();
         };
@@ -960,12 +1053,40 @@
 
     window.handleAction = async function(endpoint, paramName) {
         const text = inputField?.value.trim();
-        if (!text || !currentChatId || isLoading) return;
+        if (!text || isLoading) return;
+
+        // Если нет активного чата, создаём новый
+        if (!currentChatId) {
+            // Генерируем название из первых 50 символов сообщения
+            let chatTitle = text.slice(0, 50);
+            if (chatTitle.length === 50) chatTitle += '...';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать чат' : '❌ Failed to create chat';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
         appendMessage('user', text);
         if (inputField) {
             inputField.value = '';
             inputField.style.height = 'auto';
         }
+
         try {
             await fetch('/api/messages', {
                 method: 'POST',
@@ -973,17 +1094,20 @@
                 body: JSON.stringify({ chatId: currentChatId, role: 'user', content: text })
             });
         } catch (e) {}
+
         const aiContainer = appendMessage('assistant', '');
         setLoading(true);
         let fullText = '';
         const url = `${endpoint}?${paramName}=${encodeURIComponent(text)}&chatId=${currentChatId}`;
         currentEventSource = new EventSource(url);
+
         currentEventSource.onmessage = (e) => {
             try { fullText += JSON.parse(e.data).content || ''; }
             catch { fullText += e.data; }
             renderAssistantMarkdown(aiContainer, fullText);
             if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
         };
+
         currentEventSource.onerror = () => {
             currentEventSource.close();
             setLoading(false);
@@ -1000,63 +1124,29 @@
         };
     };
 
-    window.openNewChatModal = function() {
-        const modal = document.getElementById('new-chat-modal');
-        if (modal) {
-            modal.classList.remove('hidden');
-            const input = document.getElementById('new-chat-title');
-            if (input) {
-                input.value = '';
-                input.focus();
-            }
-            const lang = localStorage.getItem('language') || 'ru';
-            const translations = {
-                ru: { placeholder: 'Например: Проектирование микросервисов' },
-                en: { placeholder: 'Example: Microservices design' }
-            };
-            const t = translations[lang] || translations.ru;
-            input.placeholder = t.placeholder;
-        }
-    };
 
-    window.closeNewChatModal = function() {
-        const modal = document.getElementById('new-chat-modal');
-        if (modal) {
-            modal.classList.add('hidden');
-        }
-    };
 
-    window.confirmCreateChat = async function() {
-        const input = document.getElementById('new-chat-title');
-        const title = input?.value.trim();
-
-        if (!title) {
-            const lang = localStorage.getItem('language') || 'ru';
-            const message = lang === 'ru' ? 'Введите название чата' : 'Enter chat name';
-            showToast(message);
-            return;
-        }
-
-        closeNewChatModal();
+    window.createNewChat = async function() {
+        const lang = localStorage.getItem('language') || 'ru';
+        const defaultTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
 
         try {
             const res = await fetch('/api/chats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title })
+                body: JSON.stringify({ title: defaultTitle })
             });
             const chat = await res.json();
             selectChat(chat.id, chat.title);
+
+            const message = lang === 'ru' ? '✅ Чат создан' : '✅ Chat created';
+            showToast(message, 1500);
         } catch (e) {
             console.error('Ошибка создания чата:', e);
-            const lang = localStorage.getItem('language') || 'ru';
-            const message = lang === 'ru' ? 'Не удалось создать чат' : 'Failed to create chat';
+            const message = lang === 'ru' ? '❌ Не удалось создать чат' : '❌ Failed to create chat';
             showToast(message);
         }
     };
-
-    // Старая функция createNewChat заменена на openNewChatModal
-    window.createNewChat = window.openNewChatModal;
 
     // Enter в модальном окне создания чата
     const newChatInput = document.getElementById('new-chat-title');
@@ -2207,4 +2297,285 @@
     initCustomLanguageSelect();
 
 
+    // ========== КОНТЕКСТНОЕ МЕНЮ ДЛЯ ЧАТОВ ==========
+
+// Функция переименования чата
+    window.renameChat = async function(chatId, currentTitle) {
+        const lang = localStorage.getItem('language') || 'ru';
+        const newTitle = prompt(
+            lang === 'ru' ? 'Введите новое название чата:' : 'Enter new chat name:',
+            currentTitle
+        );
+
+        if (!newTitle || newTitle.trim() === '') return;
+
+        try {
+            const res = await fetch(`/api/chats/${chatId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle.trim() })
+            });
+
+            if (!res.ok) throw new Error('Ошибка переименования');
+
+            // Обновляем отображение
+            await loadChats();
+
+            // Если это текущий активный чат, обновляем заголовок
+            if (currentChatId === chatId && titleEl) {
+                titleEl.innerText = newTitle.trim();
+            }
+
+            const message = lang === 'ru' ? '✅ Чат переименован' : '✅ Chat renamed';
+            showToast(message, 1500);
+        } catch (e) {
+            console.error('Ошибка переименования:', e);
+            const message = lang === 'ru' ? '❌ Не удалось переименовать чат' : '❌ Failed to rename chat';
+            showToast(message);
+        }
+    };
+
+// Функция удаления чата
+    // Переменные для хранения ID чата при удалении
+    let deletingChatId = null;
+    let deletingChatTitle = null;
+
+// Открыть модалку подтверждения удаления
+    window.openDeleteModal = function(chatId, chatTitle) {
+        deletingChatId = chatId;
+        deletingChatTitle = chatTitle;
+
+        const modal = document.getElementById('delete-chat-modal');
+        const chatNameSpan = document.getElementById('delete-chat-name');
+
+        if (modal && chatNameSpan) {
+            chatNameSpan.textContent = chatTitle;
+            modal.classList.remove('hidden');
+        }
+    };
+
+// Закрыть модалку удаления
+    window.closeDeleteModal = function() {
+        const modal = document.getElementById('delete-chat-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        deletingChatId = null;
+        deletingChatTitle = null;
+    };
+
+// Подтвердить удаление
+    window.confirmDeleteChat = async function() {
+        if (!deletingChatId) return;
+
+        const lang = localStorage.getItem('language') || 'ru';
+
+        try {
+            const res = await fetch(`/api/chats/${deletingChatId}`, {
+                method: 'DELETE'
+            });
+
+            if (!res.ok) throw new Error('Ошибка удаления');
+
+            // Если удалили текущий чат, сбрасываем
+            if (currentChatId === deletingChatId) {
+                currentChatId = null;
+                if (titleEl) titleEl.innerText = lang === 'ru' ? 'Выберите чат в меню' : 'Select a chat from menu';
+                if (chatWindow) chatWindow.innerHTML = '';
+                resetValidationPanel();
+            }
+
+            closeDeleteModal();
+            await loadChats();
+
+            const message = lang === 'ru' ? '✅ Чат удалён' : '✅ Chat deleted';
+            showToast(message, 1500);
+        } catch (e) {
+            console.error('Ошибка удаления:', e);
+            const message = lang === 'ru' ? '❌ Не удалось удалить чат' : '❌ Failed to delete chat';
+            showToast(message);
+            closeDeleteModal();
+        }
+    };
+
+// Функция закрепления/открепления чата
+    window.pinChat = async function(chatId, event) {
+        event.stopPropagation();
+        const lang = localStorage.getItem('language') || 'ru';
+
+        try {
+            const res = await fetch(`/api/chats/${chatId}/pin`, {
+                method: 'PUT'
+            });
+
+            if (!res.ok) throw new Error('Ошибка закрепления');
+
+            const data = await res.json();
+            await loadChats(); // Перезагружаем список (закреплённые будут сверху)
+
+            const message = data.pinned
+                ? (lang === 'ru' ? '📌 Чат закреплён' : '📌 Chat pinned')
+                : (lang === 'ru' ? '📍 Чат откреплён' : '📍 Chat unpinned');
+            showToast(message, 1500);
+        } catch (e) {
+            console.error('Ошибка закрепления:', e);
+            const message = lang === 'ru' ? '❌ Не удалось закрепить чат' : '❌ Failed to pin chat';
+            showToast(message);
+        }
+    };
+
+    window.showChatMenu = function(event, chatId, chatTitle) {
+        event.stopPropagation();
+
+        const lang = localStorage.getItem('language') || 'ru';
+
+        // Удаляем старое меню, если есть
+        const existingMenu = document.querySelector('.chat-context-menu');
+        if (existingMenu) existingMenu.remove();
+
+        // Создаём новое меню
+        const menu = document.createElement('div');
+        menu.className = 'chat-context-menu fixed bg-white dark:bg-surface-container-high rounded-lg shadow-xl border border-gray-200 dark:border-outline-variant z-50 min-w-[180px] overflow-hidden';
+
+        // Позиционируем меню рядом с кнопкой
+        const btn = event.target.closest('.chat-menu-btn');
+        if (btn) {
+            const rect = btn.getBoundingClientRect();
+            let left = rect.left - 180;
+            let top = rect.top;
+
+            // Проверяем, чтобы меню не выходило за левый край
+            if (left < 10) left = rect.left + 30;
+            // Проверяем, чтобы не выходило за нижний край
+            if (top + 200 > window.innerHeight) top = rect.top - 150;
+
+            menu.style.left = `${left}px`;
+            menu.style.top = `${top}px`;
+        }
+
+        menu.innerHTML = `
+        <div class="py-1">
+            <button onclick="window.openRenameModal('${chatId}', '${chatTitle.replace(/'/g, "\\'")}'); document.querySelector('.chat-context-menu')?.remove();" 
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">edit</span>
+                ${lang === 'ru' ? 'Переименовать' : 'Rename'}
+            </button>
+            <button onclick="window.pinChat('${chatId}', event); document.querySelector('.chat-context-menu')?.remove();" 
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">push_pin</span>
+                ${lang === 'ru' ? 'Закрепить / Открепить' : 'Pin / Unpin'}
+            </button>
+            <div class="border-t border-gray-200 dark:border-outline-variant my-1"></div>
+            <button onclick="window.openDeleteModal('${chatId}', '${chatTitle.replace(/'/g, "\\'")}'); document.querySelector('.chat-context-menu')?.remove();" 
+                    class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">delete</span>
+                ${lang === 'ru' ? 'Удалить' : 'Delete'}
+            </button>
+        </div>
+    `;
+
+        document.body.appendChild(menu);
+
+        // Закрываем меню при клике вне
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+    };
+
+    // Переменные для хранения ID чата при переименовании
+    let renamingChatId = null;
+    let renamingOldTitle = null;
+
+// Открыть модалку переименования
+    window.openRenameModal = function(chatId, currentTitle) {
+        renamingChatId = chatId;
+        renamingOldTitle = currentTitle;
+
+        const modal = document.getElementById('rename-chat-modal');
+        const input = document.getElementById('rename-chat-title');
+
+        if (modal && input) {
+            input.value = currentTitle;
+            modal.classList.remove('hidden');
+            input.focus();
+            input.select();
+        }
+    };
+
+// Закрыть модалку переименования
+    window.closeRenameModal = function() {
+        const modal = document.getElementById('rename-chat-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        renamingChatId = null;
+        renamingOldTitle = null;
+    };
+
+// Подтвердить переименование
+    window.confirmRenameChat = async function() {
+        const input = document.getElementById('rename-chat-title');
+        const newTitle = input?.value.trim();
+
+        if (!newTitle) {
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? 'Введите название чата' : 'Enter chat name';
+            showToast(message);
+            return;
+        }
+
+        if (!renamingChatId) return;
+
+        const lang = localStorage.getItem('language') || 'ru';
+
+        try {
+            const res = await fetch(`/api/chats/${renamingChatId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle })
+            });
+
+            if (!res.ok) throw new Error('Ошибка переименования');
+
+            closeRenameModal();
+            await loadChats();
+
+            // Если это текущий активный чат, обновляем заголовок
+            if (currentChatId === renamingChatId && titleEl) {
+                titleEl.innerText = newTitle;
+            }
+
+            const message = lang === 'ru' ? '✅ Чат переименован' : '✅ Chat renamed';
+            showToast(message, 1500);
+        } catch (e) {
+            console.error('Ошибка переименования:', e);
+            const message = lang === 'ru' ? '❌ Не удалось переименовать чат' : '❌ Failed to rename chat';
+            showToast(message);
+        }
+    };
+
+// Enter в модалке переименования
+    const renameInput = document.getElementById('rename-chat-title');
+    if (renameInput) {
+        renameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmRenameChat();
+            }
+        });
+    }
+
+// Закрытие модалки по клику на фон
+    const renameModal = document.getElementById('rename-chat-modal');
+    if (renameModal) {
+        renameModal.addEventListener('click', (e) => {
+            if (e.target === renameModal) {
+                closeRenameModal();
+            }
+        });
+    }
 })();
