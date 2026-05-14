@@ -26,3 +26,7 @@ databaseChangeLog:
                   name: updated_at
                   type: TIMESTAMP
                   remarks: "Дата обновления"
+              - column:
+                  name: pinned
+                  type: boolean
+                  remarks: "Для закрепления"

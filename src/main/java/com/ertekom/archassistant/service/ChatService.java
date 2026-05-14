@@ -38,7 +38,13 @@ public class ChatService {
     }
 
     public List<Chat> getAllChats() {
-        return chatRepository.findAllOrderByUpdatedAtDesc();
+        List<Chat> chats = chatRepository.findAllOrderByUpdatedAtDesc();
+        chats.sort((a, b) -> {
+            if (a.isPinned() && !b.isPinned()) return -1;
+            if (!a.isPinned() && b.isPinned()) return 1;
+            return b.getUpdatedAt().compareTo(a.getUpdatedAt());
+        });
+        return chats;
     }
 
     public Chat getChatById(UUID id) {
@@ -67,6 +73,14 @@ public class ChatService {
         documentRepository.deleteByChat_Id(id);
         messageRepository.deleteByChat_Id(id);
         chatRepository.deleteById(id);
+    }
+
+    @Transactional
+    public Chat togglePin(UUID id) {
+        Chat chat = getChatById(id);
+        chat.setPinned(!chat.isPinned());
+        chat.setUpdatedAt(LocalDateTime.now());
+        return chatRepository.save(chat);
     }
 
     public List<Chat> findAll() {

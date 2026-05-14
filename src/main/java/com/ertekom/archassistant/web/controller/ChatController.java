@@ -54,4 +54,13 @@ public class ChatController {
         chatService.deleteChat(id);
         return ResponseEntity.ok(Map.of("message", "Chat deleted successfully"));
     }
+
+    @PutMapping("/{id}/pin")
+    public ResponseEntity<Map<String, Object>> togglePin(@PathVariable UUID id) {
+        Chat chat = chatService.togglePin(id);
+        return ResponseEntity.ok(Map.of(
+                "id", chat.getId(),
+                "pinned", chat.isPinned()
+        ));
+    }
 }
