@@ -124,15 +124,55 @@
             const chats = await res.json();
             const list = document.getElementById('chat-list');
             if (!list) return;
+
+            // Сортируем: закреплённые сверху, затем по дате создания
+            const pinnedChats = chats.filter(c => c.pinned);
+            const unpinnedChats = chats.filter(c => !c.pinned);
+            const sortedChats = [...pinnedChats, ...unpinnedChats];
+
             list.innerHTML = '';
-            chats.forEach(chat => {
+            sortedChats.forEach(chat => {
                 const isActive = currentChatId === chat.id;
                 const div = document.createElement('div');
-                div.className = `p-3 rounded-xl cursor-pointer transition-all flex items-center gap-3 text-sm ${
-                    isActive ? 'bg-[#0054a6] text-white shadow-md' : 'text-gray-500 dark:text-white hover:bg-black/5 dark:hover:bg-white/5'
-                }`;
-                div.innerHTML = `<span class="material-symbols-outlined text-[18px]">chat</span><span class="truncate">${chat.title || 'Без названия'}</span>`;
-                div.onclick = () => selectChat(chat.id, chat.title);
+
+                // Базовые классы для контейнера чата
+                let className = 'chat-item group p-3 rounded-xl transition-all flex items-center justify-between text-sm cursor-pointer ';
+
+                if (isActive) {
+                    className += 'bg-[#0054a6] text-white shadow-md active-chat';
+                } else {
+                    className += 'text-gray-500 dark:text-white hover:bg-black/5 dark:hover:bg-white/5';
+                }
+
+                div.className = className;
+                div.setAttribute('data-chat-id', chat.id);
+
+                // Вся строка чата кликабельна для выбора чата
+                div.onclick = (e) => {
+                    e.stopPropagation();
+                    selectChat(chat.id, chat.title);
+                };
+
+                // Экранируем标题 для безопасности
+                const safeTitle = escapeHtml(chat.title || 'Без названия').replace(/'/g, "\\'");
+
+                // Контент внутри
+                div.innerHTML = `
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <span class="material-symbols-outlined text-[18px] flex-shrink-0">${chat.pinned ? 'push_pin' : 'chat'}</span>
+                    <span class="truncate chat-title flex-1">${safeTitle}</span>
+                </div>
+                <div class="flex-shrink-0">
+                    <button class="chat-menu-btn" 
+                            style="background: transparent !important; border: none !important; padding: 0; margin: 0; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0;"
+                            onmouseenter="this.style.opacity='1'"
+                            onmouseleave="this.style.opacity='0'"
+                            onclick="event.stopPropagation(); window.showChatMenu(event, '${chat.id}', '${safeTitle}')">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: ${isActive ? 'rgba(255,255,255,0.8)' : '#9ca3af'};">more_vert</span>
+                    </button>
+                </div>
+            `;
+
                 list.appendChild(div);
             });
         } catch (e) {
@@ -144,6 +184,32 @@
         currentChatId = id;
         if (titleEl) titleEl.innerText = title;
         if (chatWindow) chatWindow.innerHTML = '';
+
+        // Обновляем активный класс во всех чатах
+        const allChats = document.querySelectorAll('.chat-item');
+        allChats.forEach(chat => {
+            if (chat.getAttribute('data-chat-id') == id) {
+                chat.classList.add('active-chat');
+                chat.classList.add('bg-[#0054a6]', 'text-white', 'shadow-md');
+                chat.classList.remove('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
+                // Обновляем стиль кнопки меню
+                const menuBtn = chat.querySelector('.chat-menu-btn');
+                if (menuBtn) {
+                    menuBtn.classList.add('text-white/70', 'hover:text-white');
+                }
+            } else {
+                chat.classList.remove('active-chat');
+                chat.classList.remove('bg-[#0054a6]', 'text-white', 'shadow-md');
+                chat.classList.add('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
+                // Обновляем стиль кнопки меню
+                const menuBtn = chat.querySelector('.chat-menu-btn');
+                if (menuBtn) {
+                    menuBtn.classList.remove('text-white/70', 'hover:text-white');
+                    menuBtn.classList.add('text-gray-400', 'hover:text-white');
+                }
+            }
+        });
+
         try {
             const res = await fetch(`/api/messages/chat/${id}`);
             const messages = await res.json();
@@ -854,15 +920,34 @@
     window.validateSolution = async function() {
         const comment = inputField?.value.trim() || '';
 
+        // Если нет активного чата, создаём новый
         if (!currentChatId) {
-            const shouldCreate = confirm('Проект не выбран. Создать новый?');
-            if (!shouldCreate) return;
+            // Генерируем название из комментария или файла
+            let chatTitle = '';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            if (comment) {
+                // Берём первые 50 символов из комментария
+                chatTitle = comment.slice(0, 50);
+                if (chatTitle.length === 50) chatTitle += '...';
+            } else if (uploadedFile) {
+                // Берём имя файла без расширения
+                chatTitle = uploadedFile.name.replace(/\.[^/.]+$/, '');
+                if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
+            } else {
+                chatTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
+            }
+
+            // Если название пустое, ставим дефолтное
+            if (!chatTitle || chatTitle.trim() === '') {
+                chatTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
+            }
+
             try {
-                const title = comment || uploadedFile?.name || 'Новый проект';
                 const res = await fetch('/api/chats', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title: title.slice(0, 50) })
+                    body: JSON.stringify({ title: chatTitle })
                 });
                 const chat = await res.json();
                 currentChatId = chat.id;
@@ -870,12 +955,14 @@
                 if (chatWindow) chatWindow.innerHTML = '';
                 loadChats();
             } catch (e) {
-                alert('Не удалось создать проект');
+                const message = lang === 'ru' ? '❌ Не удалось создать проект' : '❌ Failed to create project';
+                showToast(message);
                 console.error(e);
                 return;
             }
         }
 
+        // Загрузка файла, если есть
         if (uploadedFile && !uploadedDocumentId) {
             try {
                 appendMessage('user', `📎 Загрузка файла "${uploadedFile.name}"...`);
@@ -890,11 +977,14 @@
                 uploadedDocumentId = uploadData.documentId;
                 chatWindow?.lastChild?.remove();
             } catch (err) {
-                alert(`Ошибка загрузки файла: ${err.message}`);
+                const lang = localStorage.getItem('language') || 'ru';
+                const message = lang === 'ru' ? `❌ Ошибка загрузки файла: ${err.message}` : `❌ File upload error: ${err.message}`;
+                showToast(message);
                 return;
             }
         }
 
+        // Формируем текст сообщения пользователя
         let userDisplayText = comment || 'Проверка решения';
         if (uploadedFile) {
             userDisplayText = `📄 **Файл:** ${uploadedFile.name}` + (comment ? `\n\n**Комментарий:** ${comment}` : '');
@@ -906,6 +996,7 @@
             inputField.style.height = 'auto';
         }
 
+        // Сохраняем сообщение в БД
         try {
             await fetch('/api/messages', {
                 method: 'POST',
@@ -952,7 +1043,9 @@
                 });
                 parseAndDisplayValidationResults(fullText);
             } else {
-                renderAssistantMarkdown(aiContainer, '⚠️ **Ошибка:** не удалось получить ответ от сервера.');
+                const lang = localStorage.getItem('language') || 'ru';
+                const errorText = lang === 'ru' ? '⚠️ **Ошибка:** не удалось получить ответ от сервера.' : '⚠️ **Error:** failed to get response from server.';
+                renderAssistantMarkdown(aiContainer, errorText);
             }
             clearAttachedFile();
         };
@@ -960,12 +1053,40 @@
 
     window.handleAction = async function(endpoint, paramName) {
         const text = inputField?.value.trim();
-        if (!text || !currentChatId || isLoading) return;
+        if (!text || isLoading) return;
+
+        // Если нет активного чата, создаём новый
+        if (!currentChatId) {
+            // Генерируем название из первых 50 символов сообщения
+            let chatTitle = text.slice(0, 50);
+            if (chatTitle.length === 50) chatTitle += '...';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать чат' : '❌ Failed to create chat';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
         appendMessage('user', text);
         if (inputField) {
             inputField.value = '';
             inputField.style.height = 'auto';
         }
+
         try {
             await fetch('/api/messages', {
                 method: 'POST',
@@ -973,17 +1094,20 @@
                 body: JSON.stringify({ chatId: currentChatId, role: 'user', content: text })
             });
         } catch (e) {}
+
         const aiContainer = appendMessage('assistant', '');
         setLoading(true);
         let fullText = '';
         const url = `${endpoint}?${paramName}=${encodeURIComponent(text)}&chatId=${currentChatId}`;
         currentEventSource = new EventSource(url);
+
         currentEventSource.onmessage = (e) => {
             try { fullText += JSON.parse(e.data).content || ''; }
             catch { fullText += e.data; }
             renderAssistantMarkdown(aiContainer, fullText);
             if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
         };
+
         currentEventSource.onerror = () => {
             currentEventSource.close();
             setLoading(false);
@@ -1000,52 +1124,29 @@
         };
     };
 
-    window.openNewChatModal = function() {
-        const modal = document.getElementById('new-chat-modal');
-        if (modal) {
-            modal.classList.remove('hidden');
-            const input = document.getElementById('new-chat-title');
-            if (input) {
-                input.value = '';
-                input.focus();
-            }
-        }
-    };
 
-    window.closeNewChatModal = function() {
-        const modal = document.getElementById('new-chat-modal');
-        if (modal) {
-            modal.classList.add('hidden');
-        }
-    };
 
-    window.confirmCreateChat = async function() {
-        const input = document.getElementById('new-chat-title');
-        const title = input?.value.trim();
-
-        if (!title) {
-            alert('Введите название чата');
-            return;
-        }
-
-        closeNewChatModal();
+    window.createNewChat = async function() {
+        const lang = localStorage.getItem('language') || 'ru';
+        const defaultTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
 
         try {
             const res = await fetch('/api/chats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title })
+                body: JSON.stringify({ title: defaultTitle })
             });
             const chat = await res.json();
             selectChat(chat.id, chat.title);
+
+            const message = lang === 'ru' ? '✅ Чат создан' : '✅ Chat created';
+            showToast(message, 1500);
         } catch (e) {
             console.error('Ошибка создания чата:', e);
-            alert('Не удалось создать чат');
+            const message = lang === 'ru' ? '❌ Не удалось создать чат' : '❌ Failed to create chat';
+            showToast(message);
         }
     };
-
-    // Старая функция createNewChat заменена на openNewChatModal
-    window.createNewChat = window.openNewChatModal;
 
     // Enter в модальном окне создания чата
     const newChatInput = document.getElementById('new-chat-title');
@@ -1115,12 +1216,16 @@
         const container = document.getElementById('knowledge-sources-list');
         if (!container) return;
 
+        const lang = localStorage.getItem('language') || 'ru';
+        const noSourcesText = lang === 'ru' ? 'Нет добавленных источников' : 'No sources added';
+
         const namesMap = getLocalNamesMap();
 
         if (sources.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-xs text-center py-2">Нет добавленных источников</p>';
+            container.innerHTML = `<p class="text-gray-500 text-xs text-center py-2">${noSourcesText}</p>`;
             return;
         }
+
 
         container.innerHTML = sources.map(source => {
             const displayName = namesMap[source.id] || source.repositoryUrl.split('/').pop() || 'Источник';
@@ -1183,18 +1288,19 @@
     window.addKnowledgeSource = async function() {
         const url = sourceUrl?.value.trim();
         if (!url) {
-            alert('Введите URL репозитория');
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? 'Введите URL репозитория' : 'Enter repository URL';
+            showToast(message);
             return;
         }
         const branch = sourceBranch?.value.trim() || 'main';
-        const localPath = sourcePath?.value.trim() || '/knowledge';
         const displayName = sourceDisplayName?.value.trim() || url.split('/').pop() || 'Источник';
 
         try {
             const res = await fetch('/api/knowledge-sources', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ repositoryUrl: url, branch, localPath })
+                body: JSON.stringify({ repositoryUrl: url, branch })
             });
             if (!res.ok) throw new Error('Ошибка создания источника');
             const data = await res.json();
@@ -1202,9 +1308,14 @@
             saveLocalName(data.id, displayName);
             closeSourceModal();
             await loadKnowledgeSources();
-            alert(`Источник "${displayName}" добавлен.`);
+
+            const lang = localStorage.getItem('language') || 'ru';
+            const successMessage = lang === 'ru' ? `Источник "${displayName}" добавлен.` : `Source "${displayName}" added.`;
+            showToast(successMessage);
         } catch (e) {
-            alert('Не удалось добавить источник: ' + e.message);
+            const lang = localStorage.getItem('language') || 'ru';
+            const errorMessage = lang === 'ru' ? 'Не удалось добавить источник: ' + e.message : 'Failed to add source: ' + e.message;
+            showToast(errorMessage);
             console.error(e);
         }
     };
@@ -1218,12 +1329,23 @@
         try {
             const res = await fetch(`/api/knowledge/sync/${sourceId}`, { method: 'POST' });
             const data = await res.json();
-            alert(data.message || 'Синхронизация завершена');
+
+            const lang = localStorage.getItem('language') || 'ru';
+            if (data.status === 'success') {
+                const message = lang === 'ru' ? '✅ Синхронизация завершена' : '✅ Sync completed';
+                showToast(message);
+            } else {
+                const message = lang === 'ru' ? '❌ Ошибка синхронизации: ' + data.message : '❌ Sync error: ' + data.message;
+                showToast(message);
+            }
         } catch (e) {
-            alert('Ошибка синхронизации: ' + e.message);
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? '❌ Ошибка синхронизации: ' + e.message : '❌ Sync error: ' + e.message;
+            showToast(message);
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalContent;
+            await loadKnowledgeSources();
         }
     };
 
@@ -1236,12 +1358,23 @@
         try {
             const res = await fetch('/api/knowledge/sync/all', { method: 'POST' });
             const data = await res.json();
-            alert(data.message || 'Синхронизация завершена');
+
+            const lang = localStorage.getItem('language') || 'ru';
+            if (data.status === 'completed') {
+                const message = lang === 'ru' ? data.message : `Sync completed. Success: ${data.successCount || 0}, Errors: ${data.failCount || 0}`;
+                showToast(message);
+            } else {
+                const message = lang === 'ru' ? data.message : 'Sync warning';
+                showToast(message);
+            }
         } catch (e) {
-            alert('Ошибка синхронизации: ' + e.message);
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? '❌ Ошибка синхронизации: ' + e.message : '❌ Sync error: ' + e.message;
+            showToast(message);
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalText;
+            await loadKnowledgeSources();
         }
     };
 
@@ -1670,5 +1803,779 @@
         }
     });
 
+    // ========== НАСТРОЙКИ ЯЗЫКА ==========
 
+    // Загрузка сохранённого языка
+    function loadLanguage() {
+        const savedLang = localStorage.getItem('language') || 'ru';
+        const langSelect = document.getElementById('language-select');
+        if (langSelect) {
+            langSelect.value = savedLang;
+        }
+        applyLanguage(savedLang);
+    }
+
+    // Применение языка к интерфейсу
+    function applyLanguage(lang) {
+        const translations = {
+            ru: {
+                'new-chat': 'Новый чат',
+                'settings': 'Настройки',
+                'general': 'Общие',
+                'performance': 'Производительность',
+                'about': 'О программе',
+                'dark-theme': 'Тёмная тема',
+                'dark-theme-desc': 'Включить тёмную тему интерфейса',
+                'language': 'Язык интерфейса',
+                'language-restart': 'Изменение языка требует перезагрузки страницы',
+                'save': 'Сохранить',
+                'close': 'Закрыть',
+                'send': 'Отправить',
+                'check': 'Проверить',
+                'attach': 'Прикрепить файл',
+                'placeholder': 'Введите описание задачи или прикрепите файл...',
+                'threads': 'Потоки CPU (num_thread)',
+                'threads-recommend': 'Рекомендуется: 8-10 для 6-ядерного CPU',
+                'temperature': 'Температура (креативность)',
+                'temperature-desc': '0.3-0.4 — архитектурные задачи, 0.6-0.8 — креативные идеи',
+                'save-settings': 'Сохранить настройки',
+                'about-title': 'Помощник ИТ-архитектора',
+                'about-version': 'Версия 1.0.0',
+                'terms': 'Условия использования',
+                'privacy': 'Политика конфиденциальности',
+                'licenses': 'Лицензии',
+                'no-chats': 'Нет чатов',
+                'untitled': 'Без названия',
+                'select-chat': 'Выберите чат в меню',
+                'add-source': 'Добавить источник',
+                'sync-all': 'Синхронизировать всё',
+                'no-sources': 'Нет добавленных источников',
+                'knowledge-base': 'БАЗА ЗНАНИЙ (GITLAB)',
+                'footer': 'ЭР-Телеком Холдинг',
+                'new-chat-title': 'Создать новый чат',
+                'chat-name': 'Название чата',
+                'chat-placeholder': 'Например: Проектирование микросервисов',
+                'create': 'Создать',
+                'source-display-name-placeholder': 'Мои стандарты',
+                'source-url-placeholder': 'https://gitlab.com/...',
+                'source-branch-placeholder': 'main',
+                'source-path-placeholder': '/knowledge',
+                'cancel': 'Отмена',
+                'add': 'Добавить',
+                'source-display-name': 'Название (для отображения)',
+                'source-url': 'URL репозитория',
+                'source-branch': 'Ветка',
+                'source-path': 'Локальный путь (опционально)',
+                'add-source-title': 'Добавить источник знаний',
+                'ai-disclaimer': 'Сгенерировано ИИ · Информация может быть неточной',
+                'logo-title': 'ЭР-Ассистент'
+            },
+            en: {
+                'new-chat': 'New chat',
+                'settings': 'Settings',
+                'general': 'General',
+                'performance': 'Performance',
+                'about': 'About',
+                'dark-theme': 'Dark theme',
+                'dark-theme-desc': 'Enable dark interface theme',
+                'language': 'Interface language',
+                'language-restart': 'Language change requires page reload',
+                'save': 'Save',
+                'close': 'Close',
+                'send': 'Send',
+                'check': 'Check',
+                'attach': 'Attach file',
+                'placeholder': 'Enter task description or attach a file...',
+                'threads': 'CPU threads (num_thread)',
+                'threads-recommend': 'Recommended: 8-10 for 6-core CPU',
+                'temperature': 'Temperature (creativity)',
+                'temperature-desc': '0.3-0.4 — architectural tasks, 0.6-0.8 — creative ideas',
+                'save-settings': 'Save settings',
+                'about-title': 'IT Architecture Assistant',
+                'about-version': 'Version 1.0.0',
+                'terms': 'Terms of Use',
+                'privacy': 'Privacy Policy',
+                'licenses': 'Licenses',
+                'no-chats': 'No chats',
+                'untitled': 'Untitled',
+                'select-chat': 'Select a chat from the menu',
+                'add-source': 'Add source',
+                'sync-all': 'Sync all',
+                'no-sources': 'No sources added',
+                'knowledge-base': 'KNOWLEDGE BASE (GITLAB)',
+                'footer': 'ER-Telecom Holding',
+                'new-chat-title': 'Create new chat',
+                'chat-name': 'Chat name',
+                'chat-placeholder': 'Example: Microservices design',
+                'create': 'Create',
+                'source-display-name-placeholder': 'My standards',
+                'source-url-placeholder': 'https://gitlab.com/...',
+                'source-branch-placeholder': 'main',
+                'source-path-placeholder': '/knowledge',
+                'cancel': 'Cancel',
+                'add': 'Add',
+                'source-display-name': 'Name (for display)',
+                'source-url': 'Repository URL',
+                'source-branch': 'Branch',
+                'source-path': 'Local path (optional)',
+                'add-source-title': 'Add knowledge source',
+                'ai-disclaimer': 'Generated by AI · Information may be inaccurate',
+                'logo-title': 'ER-Assistant'
+            }
+        };
+
+        const t = translations[lang] || translations.ru;
+
+
+        // Логотип / название в сайдбаре
+        const logoTitle = document.getElementById('logo-title');
+        if (logoTitle) {
+            logoTitle.textContent = t['logo-title'];
+        }
+
+        // Подпись "Сгенерировано ИИ"
+        const aiDisclaimer = document.getElementById('ai-disclaimer');
+        if (aiDisclaimer) {
+            aiDisclaimer.textContent = t['ai-disclaimer'];
+        }
+        // Принудительное обновление текста "Изменение языка требует перезагрузки страницы"
+        const allHints = document.querySelectorAll('.text-xs.text-gray-500');
+        allHints.forEach(hint => {
+            if (hint.textContent.includes('Изменение языка') || hint.textContent.includes('Language change')) {
+                hint.textContent = t['language-restart'];
+            }
+        });
+
+        // Также обновляем конкретный элемент в настройках
+        const langHint = document.querySelector('#tab-general-content .text-xs.text-gray-500');
+        if (langHint && (langHint.textContent.includes('Изменение') || langHint.textContent.includes('Language'))) {
+            langHint.textContent = t['language-restart'];
+        }
+
+        // Кнопка "Новый чат"
+        const newChatBtn = document.querySelector('.btn-new-chat');
+        if (newChatBtn) {
+            newChatBtn.innerHTML = `<span class="material-symbols-outlined">add</span> ${t['new-chat']}`;
+        }
+
+        // Сообщение "Нет добавленных источников" (принудительно)
+        const sourcesList = document.getElementById('knowledge-sources-list');
+        if (sourcesList && sourcesList.innerHTML.includes('Нет добавленных источников')) {
+            sourcesList.innerHTML = `<p class="text-gray-500 text-xs text-center py-2">${t['no-sources']}</p>`;
+        } else if (sourcesList && sourcesList.children.length === 0) {
+            sourcesList.innerHTML = `<p class="text-gray-500 text-xs text-center py-2">${t['no-sources']}</p>`;
+        }
+
+        // Заголовок настроек
+        const settingsTitle = document.querySelector('#settings-modal h2');
+        if (settingsTitle) settingsTitle.textContent = t['settings'];
+
+        // Вкладки
+        const generalTab = document.getElementById('tab-general');
+        if (generalTab) generalTab.innerHTML = `<span class="material-symbols-outlined text-sm align-middle mr-2">settings</span> ${t['general']}`;
+
+        const performanceTab = document.getElementById('tab-performance');
+        if (performanceTab) performanceTab.innerHTML = `<span class="material-symbols-outlined text-sm align-middle mr-2">speed</span> ${t['performance']}`;
+
+        const aboutTab = document.getElementById('tab-about');
+        if (aboutTab) aboutTab.innerHTML = `<span class="material-symbols-outlined text-sm align-middle mr-2">info</span> ${t['about']}`;
+
+        // Тёмная тема
+        const themeLabel = document.querySelector('#tab-general-content .text-sm.font-medium');
+        if (themeLabel) themeLabel.textContent = t['dark-theme'];
+
+        const themeDesc = document.querySelector('#tab-general-content .text-xs.text-gray-500');
+        if (themeDesc && themeDesc.parentElement === themeLabel?.parentElement) {
+            themeDesc.textContent = t['dark-theme-desc'];
+        }
+
+        // Язык
+        const langLabel = document.querySelector('#tab-general-content select')?.previousElementSibling;
+        if (langLabel) langLabel.textContent = t['language'];
+
+
+
+        // Производительность
+        const threadsLabel = document.querySelector('#tab-performance-content .text-sm.font-medium');
+        if (threadsLabel) threadsLabel.textContent = t['threads'];
+
+        const threadsHint = document.querySelector('#tab-performance-content .text-xs.text-gray-500');
+        if (threadsHint && threadsHint.textContent.includes('Рекомендуется')) {
+            threadsHint.textContent = t['threads-recommend'];
+        }
+
+        const tempLabel = document.querySelectorAll('#tab-performance-content .text-sm.font-medium')[1];
+        if (tempLabel) tempLabel.textContent = t['temperature'];
+
+        const tempHint = document.querySelectorAll('#tab-performance-content .text-xs.text-gray-500')[1];
+        if (tempHint && tempHint.textContent.includes('0.3-0.4')) {
+            tempHint.textContent = t['temperature-desc'];
+        }
+
+        const saveBtn = document.querySelector('#tab-performance-content button');
+        if (saveBtn) saveBtn.textContent = t['save-settings'];
+
+        // Кнопка закрытия
+        const closeBtn = document.querySelector('#settings-modal .border-t button');
+        if (closeBtn) closeBtn.textContent = t['close'];
+
+        // О программе
+        const aboutTitle = document.querySelector('#tab-about-content h3');
+        if (aboutTitle) aboutTitle.textContent = t['about-title'];
+
+        const aboutVersion = document.querySelector('#tab-about-content .text-xs.text-gray-400');
+        if (aboutVersion) aboutVersion.textContent = t['about-version'];
+
+        const termsBtn = document.querySelector('#tab-about-content button:first-of-type');
+        if (termsBtn) termsBtn.innerHTML = `📜 ${t['terms']}`;
+
+        const privacyBtn = document.querySelectorAll('#tab-about-content button')[1];
+        if (privacyBtn) privacyBtn.innerHTML = `🔒 ${t['privacy']}`;
+
+        const licensesBtn = document.querySelectorAll('#tab-about-content button')[2];
+        if (licensesBtn) licensesBtn.innerHTML = `📄 ${t['licenses']}`;
+
+        // Кнопки чата
+        const sendBtn = document.querySelector('button[onclick*="handleAction"]');
+        if (sendBtn) sendBtn.title = t['send'];
+
+        const validateBtn = document.querySelector('button[onclick="validateSolution()"]');
+        if (validateBtn) validateBtn.innerHTML = `<span class="material-symbols-outlined text-lg">verified</span> ${t['check']}`;
+
+        const attachLabel = document.getElementById('attach-btn');
+        if (attachLabel) attachLabel.title = t['attach'];
+
+        // Поле ввода
+        const inputField = document.getElementById('user-input');
+        if (inputField && !inputField.placeholder.includes('Файл')) {
+            inputField.placeholder = t['placeholder'];
+        }
+
+        // Текст в модалках
+        const termsTitle = document.querySelector('#terms-modal h2');
+        if (termsTitle) termsTitle.textContent = t['terms'];
+
+        const privacyTitle = document.querySelector('#privacy-modal h2');
+        if (privacyTitle) privacyTitle.textContent = t['privacy'];
+
+        const termsOkBtn = document.querySelector('#terms-modal .bg-primary');
+        if (termsOkBtn) termsOkBtn.textContent = t['close'];
+
+        const privacyOkBtn = document.querySelector('#privacy-modal .bg-primary');
+        if (privacyOkBtn) privacyOkBtn.textContent = t['close'];
+
+        // Заголовок "Выберите чат в меню"
+        const activeChatTitle = document.getElementById('active-chat-title');
+        if (activeChatTitle && !activeChatTitle.innerText.includes('Файл')) {
+            activeChatTitle.textContent = t['select-chat'];
+        }
+
+        // Кнопка "Добавить источник"
+        const addSourceBtn = document.querySelector('#knowledge-section button:first-child');
+        if (addSourceBtn) {
+            addSourceBtn.innerHTML = `<span class="material-symbols-outlined text-base">cloud_upload</span> ${t['add-source']}`;
+        }
+
+        // Кнопка "Синхронизировать всё"
+        const syncAllBtn = document.querySelector('#knowledge-section button:last-child');
+        if (syncAllBtn && syncAllBtn.querySelector('.material-symbols-outlined')?.textContent === 'sync') {
+            syncAllBtn.innerHTML = `<span class="material-symbols-outlined text-base">sync</span> ${t['sync-all']}`;
+        }
+
+        const knowledgeTexts = document.querySelectorAll('.text-gray-500.uppercase');
+        knowledgeTexts.forEach(el => {
+            if (el.textContent.includes('БАЗА ЗНАНИЙ') || el.textContent.includes('KNOWLEDGE BASE')) {
+                el.textContent = t['knowledge-base'];
+            }
+        });
+
+        // Кнопка "Синхронизировать всё" (переопределяем forcefully)
+        const syncBtn = document.querySelector('#knowledge-section button.bg-primary\\/20');
+        if (syncBtn) {
+            syncBtn.innerHTML = `<span class="material-symbols-outlined text-base">sync</span> ${t['sync-all']}`;
+        } else {
+            // Альтернативный поиск
+            const allBtns = document.querySelectorAll('#knowledge-section button');
+            allBtns.forEach(btn => {
+                if (btn.textContent.includes('Синхронизировать') || btn.innerHTML.includes('sync')) {
+                    btn.innerHTML = `<span class="material-symbols-outlined text-base">sync</span> ${t['sync-all']}`;
+                }
+            });
+        }
+
+        // Кнопка "Добавить источник"
+        const addBtn = document.querySelector('#knowledge-section button:first-child');
+        if (addBtn) {
+            addBtn.innerHTML = `<span class="material-symbols-outlined text-base">cloud_upload</span> ${t['add-source']}`;
+        }
+
+        // Сообщение "Нет добавленных источников"
+        const sourcesContainer = document.getElementById('knowledge-sources-list');
+        if (sourcesContainer && sourcesContainer.innerHTML.includes('Нет добавленных источников')) {
+            sourcesContainer.innerHTML = `<p class="text-gray-500 text-xs text-center py-2">${t['no-sources']}</p>`;
+        } else if (sourcesContainer && sourcesContainer.children.length === 0) {
+            sourcesContainer.innerHTML = `<p class="text-gray-500 text-xs text-center py-2">${t['no-sources']}</p>`;
+        }
+
+        // Заголовок "БАЗА ЗНАНИЙ"
+        const knowledgeHeader = document.querySelector('.border-t .text-gray-500.uppercase');
+        if (knowledgeHeader) {
+            knowledgeHeader.textContent = t['knowledge-base'];
+        }
+
+        // Футер
+        const footer = document.querySelector('.footer-brand p');
+        if (footer) {
+            footer.textContent = t['footer'];
+        }
+
+        // Модальное окно создания чата
+        const modalTitle = document.querySelector('#new-chat-modal h2');
+        if (modalTitle) modalTitle.textContent = t['new-chat-title'];
+
+        const modalLabel = document.querySelector('#new-chat-modal label');
+        if (modalLabel) modalLabel.textContent = t['chat-name'];
+
+        const modalInput = document.getElementById('new-chat-title');
+        if (modalInput) modalInput.placeholder = t['chat-placeholder'];
+
+        const cancelBtn = document.querySelector('#new-chat-modal button:first-of-type');
+        if (cancelBtn) cancelBtn.textContent = t['cancel'];
+
+        const createBtn = document.querySelector('#new-chat-modal button:last-of-type');
+        if (createBtn) createBtn.textContent = t['create'];
+
+        // Модальное окно добавления источника
+        const sourceModalTitle = document.getElementById('source-modal-title');
+        if (sourceModalTitle) sourceModalTitle.textContent = t['add-source-title'];
+
+        const displayNameLabel = document.getElementById('source-display-name-label');
+        if (displayNameLabel) displayNameLabel.textContent = t['source-display-name'];
+
+        const displayNameInput = document.getElementById('source-display-name-input');
+        if (displayNameInput) displayNameInput.placeholder = t['source-display-name-placeholder'];
+
+        const urlLabel = document.getElementById('source-url-label');
+        if (urlLabel) urlLabel.textContent = t['source-url'];
+
+        const urlInput = document.getElementById('source-url-input');
+        if (urlInput) urlInput.placeholder = t['source-url-placeholder'];
+
+        const branchLabel = document.getElementById('source-branch-label');
+        if (branchLabel) branchLabel.textContent = t['source-branch'];
+
+        const branchInput = document.getElementById('source-branch-input');
+        if (branchInput) branchInput.placeholder = t['source-branch-placeholder'];
+
+        const pathLabel = document.getElementById('source-path-label');
+        if (pathLabel) pathLabel.textContent = t['source-path'];
+
+        const pathInput = document.getElementById('source-path-input');
+        if (pathInput) pathInput.placeholder = t['source-path-placeholder'];
+
+        const sourceCancelBtn = document.getElementById('source-modal-cancel');
+        if (sourceCancelBtn) sourceCancelBtn.textContent = t['cancel'];
+
+        const sourceAddBtn = document.getElementById('source-modal-add');
+        if (sourceAddBtn) sourceAddBtn.textContent = t['add'];
+    }
+
+    function saveLanguage() {
+        const langSelect = document.getElementById('language-select');
+        if (langSelect) {
+            const lang = langSelect.value;
+            localStorage.setItem('language', lang);
+            applyLanguage(lang);
+            const message = lang === 'ru' ? 'Язык изменён. Перезагрузите страницу.' : 'Language changed. Please reload the page.';
+            showToast(message);
+        }
+    }
+
+    // Инициализация языка
+    function initLanguage() {
+        const langSelect = document.getElementById('language-select');
+        if (langSelect) {
+            langSelect.onchange = () => {
+                saveLanguage();
+            };
+        }
+        loadLanguage();
+    }
+
+    initLanguage();
+
+    function showToast(message, duration = 3000) {
+        const toast = document.getElementById('custom-toast');
+        const toastMessage = document.getElementById('toast-message');
+
+        if (!toast) return;
+
+        toastMessage.textContent = message;
+        toast.classList.remove('opacity-0', 'translate-y-10');
+        toast.classList.add('opacity-100', 'translate-y-0');
+
+        setTimeout(() => {
+            toast.classList.remove('opacity-100', 'translate-y-0');
+            toast.classList.add('opacity-0', 'translate-y-10');
+        }, duration);
+    }
+
+    // Кастомный селект языка
+    function initCustomLanguageSelect() {
+        const selectBtn = document.getElementById('language-select-btn');
+        const dropdown = document.getElementById('language-dropdown');
+        const selectedText = document.getElementById('language-selected-text');
+        const arrow = document.getElementById('language-arrow');
+        const options = document.querySelectorAll('.language-option');
+
+        if (!selectBtn) return;
+
+        // Открытие/закрытие дропдауна
+        selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('hidden');
+            arrow.style.transform = dropdown.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        });
+
+        // Выбор опции
+        options.forEach(option => {
+            option.addEventListener('click', () => {
+                const lang = option.dataset.lang;
+                const langName = option.querySelector('span:last-child').textContent;
+                const checkIcon = option.querySelector('.material-symbols-outlined');
+
+                // Обновляем выбранный текст
+                selectedText.innerHTML = `<span class="material-symbols-outlined text-base">language</span> ${langName}`;
+
+                // Обновляем галочки
+                options.forEach(opt => {
+                    const icon = opt.querySelector('.material-symbols-outlined');
+                    if (icon) icon.classList.add('opacity-0');
+                });
+                if (checkIcon) checkIcon.classList.remove('opacity-0');
+
+                // Закрываем дропдаун
+                dropdown.classList.add('hidden');
+                arrow.style.transform = 'rotate(0deg)';
+
+                // Сохраняем язык
+                localStorage.setItem('language', lang);
+                applyLanguage(lang);
+
+                // Показываем уведомление о перезагрузке
+                const message = lang === 'ru' ? 'Язык изменён. Перезагрузите страницу.' : 'Language changed. Please reload the page.';
+                showToast(message);
+            });
+        });
+
+        // Закрытие при клике вне
+        document.addEventListener('click', (e) => {
+            if (!selectBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.add('hidden');
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        });
+
+        // Установка выбранного значения при загрузке
+        const savedLang = localStorage.getItem('language') || 'ru';
+        const activeOption = document.querySelector(`.language-option[data-lang="${savedLang}"]`);
+        if (activeOption) {
+            const langName = activeOption.querySelector('span:last-child').textContent;
+            selectedText.innerHTML = `<span class="material-symbols-outlined text-base">language</span> ${langName}`;
+
+            // Обновляем галочки
+            options.forEach(opt => {
+                const icon = opt.querySelector('.material-symbols-outlined');
+                if (icon) icon.classList.add('opacity-0');
+            });
+            const checkIcon = activeOption.querySelector('.material-symbols-outlined');
+            if (checkIcon) checkIcon.classList.remove('opacity-0');
+        }
+    }
+
+    // Инициализация кастомного селекта языка
+    initCustomLanguageSelect();
+
+
+    // ========== КОНТЕКСТНОЕ МЕНЮ ДЛЯ ЧАТОВ ==========
+
+// Функция переименования чата
+    window.renameChat = async function(chatId, currentTitle) {
+        const lang = localStorage.getItem('language') || 'ru';
+        const newTitle = prompt(
+            lang === 'ru' ? 'Введите новое название чата:' : 'Enter new chat name:',
+            currentTitle
+        );
+
+        if (!newTitle || newTitle.trim() === '') return;
+
+        try {
+            const res = await fetch(`/api/chats/${chatId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle.trim() })
+            });
+
+            if (!res.ok) throw new Error('Ошибка переименования');
+
+            // Обновляем отображение
+            await loadChats();
+
+            // Если это текущий активный чат, обновляем заголовок
+            if (currentChatId === chatId && titleEl) {
+                titleEl.innerText = newTitle.trim();
+            }
+
+            const message = lang === 'ru' ? '✅ Чат переименован' : '✅ Chat renamed';
+            showToast(message, 1500);
+        } catch (e) {
+            console.error('Ошибка переименования:', e);
+            const message = lang === 'ru' ? '❌ Не удалось переименовать чат' : '❌ Failed to rename chat';
+            showToast(message);
+        }
+    };
+
+// Функция удаления чата
+    // Переменные для хранения ID чата при удалении
+    let deletingChatId = null;
+    let deletingChatTitle = null;
+
+// Открыть модалку подтверждения удаления
+    window.openDeleteModal = function(chatId, chatTitle) {
+        deletingChatId = chatId;
+        deletingChatTitle = chatTitle;
+
+        const modal = document.getElementById('delete-chat-modal');
+        const chatNameSpan = document.getElementById('delete-chat-name');
+
+        if (modal && chatNameSpan) {
+            chatNameSpan.textContent = chatTitle;
+            modal.classList.remove('hidden');
+        }
+    };
+
+// Закрыть модалку удаления
+    window.closeDeleteModal = function() {
+        const modal = document.getElementById('delete-chat-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        deletingChatId = null;
+        deletingChatTitle = null;
+    };
+
+// Подтвердить удаление
+    window.confirmDeleteChat = async function() {
+        if (!deletingChatId) return;
+
+        const lang = localStorage.getItem('language') || 'ru';
+
+        try {
+            const res = await fetch(`/api/chats/${deletingChatId}`, {
+                method: 'DELETE'
+            });
+
+            if (!res.ok) throw new Error('Ошибка удаления');
+
+            // Если удалили текущий чат, сбрасываем
+            if (currentChatId === deletingChatId) {
+                currentChatId = null;
+                if (titleEl) titleEl.innerText = lang === 'ru' ? 'Выберите чат в меню' : 'Select a chat from menu';
+                if (chatWindow) chatWindow.innerHTML = '';
+                resetValidationPanel();
+            }
+
+            closeDeleteModal();
+            await loadChats();
+
+            const message = lang === 'ru' ? '✅ Чат удалён' : '✅ Chat deleted';
+            showToast(message, 1500);
+        } catch (e) {
+            console.error('Ошибка удаления:', e);
+            const message = lang === 'ru' ? '❌ Не удалось удалить чат' : '❌ Failed to delete chat';
+            showToast(message);
+            closeDeleteModal();
+        }
+    };
+
+// Функция закрепления/открепления чата
+    window.pinChat = async function(chatId, event) {
+        event.stopPropagation();
+        const lang = localStorage.getItem('language') || 'ru';
+
+        try {
+            const res = await fetch(`/api/chats/${chatId}/pin`, {
+                method: 'PUT'
+            });
+
+            if (!res.ok) throw new Error('Ошибка закрепления');
+
+            const data = await res.json();
+            await loadChats(); // Перезагружаем список (закреплённые будут сверху)
+
+            const message = data.pinned
+                ? (lang === 'ru' ? '📌 Чат закреплён' : '📌 Chat pinned')
+                : (lang === 'ru' ? '📍 Чат откреплён' : '📍 Chat unpinned');
+            showToast(message, 1500);
+        } catch (e) {
+            console.error('Ошибка закрепления:', e);
+            const message = lang === 'ru' ? '❌ Не удалось закрепить чат' : '❌ Failed to pin chat';
+            showToast(message);
+        }
+    };
+
+    window.showChatMenu = function(event, chatId, chatTitle) {
+        event.stopPropagation();
+
+        const lang = localStorage.getItem('language') || 'ru';
+
+        // Удаляем старое меню, если есть
+        const existingMenu = document.querySelector('.chat-context-menu');
+        if (existingMenu) existingMenu.remove();
+
+        // Создаём новое меню
+        const menu = document.createElement('div');
+        menu.className = 'chat-context-menu fixed bg-white dark:bg-surface-container-high rounded-lg shadow-xl border border-gray-200 dark:border-outline-variant z-50 min-w-[180px] overflow-hidden';
+
+        // Позиционируем меню рядом с кнопкой
+        const btn = event.target.closest('.chat-menu-btn');
+        if (btn) {
+            const rect = btn.getBoundingClientRect();
+            let left = rect.left - 180;
+            let top = rect.top;
+
+            // Проверяем, чтобы меню не выходило за левый край
+            if (left < 10) left = rect.left + 30;
+            // Проверяем, чтобы не выходило за нижний край
+            if (top + 200 > window.innerHeight) top = rect.top - 150;
+
+            menu.style.left = `${left}px`;
+            menu.style.top = `${top}px`;
+        }
+
+        menu.innerHTML = `
+        <div class="py-1">
+            <button onclick="window.openRenameModal('${chatId}', '${chatTitle.replace(/'/g, "\\'")}'); document.querySelector('.chat-context-menu')?.remove();" 
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">edit</span>
+                ${lang === 'ru' ? 'Переименовать' : 'Rename'}
+            </button>
+            <button onclick="window.pinChat('${chatId}', event); document.querySelector('.chat-context-menu')?.remove();" 
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">push_pin</span>
+                ${lang === 'ru' ? 'Закрепить / Открепить' : 'Pin / Unpin'}
+            </button>
+            <div class="border-t border-gray-200 dark:border-outline-variant my-1"></div>
+            <button onclick="window.openDeleteModal('${chatId}', '${chatTitle.replace(/'/g, "\\'")}'); document.querySelector('.chat-context-menu')?.remove();" 
+                    class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">delete</span>
+                ${lang === 'ru' ? 'Удалить' : 'Delete'}
+            </button>
+        </div>
+    `;
+
+        document.body.appendChild(menu);
+
+        // Закрываем меню при клике вне
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+    };
+
+    // Переменные для хранения ID чата при переименовании
+    let renamingChatId = null;
+    let renamingOldTitle = null;
+
+// Открыть модалку переименования
+    window.openRenameModal = function(chatId, currentTitle) {
+        renamingChatId = chatId;
+        renamingOldTitle = currentTitle;
+
+        const modal = document.getElementById('rename-chat-modal');
+        const input = document.getElementById('rename-chat-title');
+
+        if (modal && input) {
+            input.value = currentTitle;
+            modal.classList.remove('hidden');
+            input.focus();
+            input.select();
+        }
+    };
+
+// Закрыть модалку переименования
+    window.closeRenameModal = function() {
+        const modal = document.getElementById('rename-chat-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        renamingChatId = null;
+        renamingOldTitle = null;
+    };
+
+// Подтвердить переименование
+    window.confirmRenameChat = async function() {
+        const input = document.getElementById('rename-chat-title');
+        const newTitle = input?.value.trim();
+
+        if (!newTitle) {
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? 'Введите название чата' : 'Enter chat name';
+            showToast(message);
+            return;
+        }
+
+        if (!renamingChatId) return;
+
+        const lang = localStorage.getItem('language') || 'ru';
+
+        try {
+            const res = await fetch(`/api/chats/${renamingChatId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle })
+            });
+
+            if (!res.ok) throw new Error('Ошибка переименования');
+
+            closeRenameModal();
+            await loadChats();
+
+            // Если это текущий активный чат, обновляем заголовок
+            if (currentChatId === renamingChatId && titleEl) {
+                titleEl.innerText = newTitle;
+            }
+
+            const message = lang === 'ru' ? '✅ Чат переименован' : '✅ Chat renamed';
+            showToast(message, 1500);
+        } catch (e) {
+            console.error('Ошибка переименования:', e);
+            const message = lang === 'ru' ? '❌ Не удалось переименовать чат' : '❌ Failed to rename chat';
+            showToast(message);
+        }
+    };
+
+// Enter в модалке переименования
+    const renameInput = document.getElementById('rename-chat-title');
+    if (renameInput) {
+        renameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmRenameChat();
+            }
+        });
+    }
+
+// Закрытие модалки по клику на фон
+    const renameModal = document.getElementById('rename-chat-modal');
+    if (renameModal) {
+        renameModal.addEventListener('click', (e) => {
+            if (e.target === renameModal) {
+                closeRenameModal();
+            }
+        });
+    }
 })();

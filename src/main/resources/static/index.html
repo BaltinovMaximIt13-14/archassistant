@@ -35,7 +35,7 @@
     <div class="p-6">
         <div class="flex items-center gap-3 mb-8">
             <img src="/logo.png" alt="Logo" class="w-8 h-8">
-            <span class="text-xl font-bold font-headline uppercase tracking-tight logo-text">ER-Assistant</span>
+            <span id="logo-title" class="text-xl font-bold font-headline uppercase tracking-tight logo-text">ER-Assistant</span>
         </div>
         <button onclick="createNewChat()" class="w-full py-3 bg-white text-black rounded-full font-bold flex items-center justify-center gap-2 hover:bg-gray-200 transition-all active:scale-95 btn-new-chat">
             <span class="material-symbols-outlined">add</span> Новый чат
@@ -73,29 +73,29 @@
 
 <!-- Модальное окно добавления источника -->
 <div id="source-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
-    <div class="bg-surface-container-high rounded-2xl border border-outline-variant p-6 w-full max-w-md shadow-2xl">
-        <h2 class="text-xl font-bold mb-4">Добавить источник знаний</h2>
+    <div class="bg-white dark:bg-surface-container-high rounded-2xl border border-gray-200 dark:border-outline-variant p-6 w-full max-w-md shadow-2xl">
+        <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-white">Добавить источник знаний</h2>
         <div class="space-y-4">
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Название (для отображения)</label>
-                <input type="text" id="source-display-name" placeholder="Мои стандарты" class="w-full bg-black/20 border border-outline-variant rounded-lg px-4 py-2 text-white focus:ring-primary">
+                <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">Название (для отображения)</label>
+                <input type="text" id="source-display-name" placeholder="Мои стандарты" class="w-full border rounded-lg px-4 py-2 focus:ring-primary focus:outline-none bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-gray-300 dark:border-outline-variant">
             </div>
             <div>
-                <label class="block text-sm text-gray-400 mb-1">URL репозитория</label>
-                <input type="text" id="source-url" placeholder="https://gitlab.com/..." class="w-full bg-black/20 border border-outline-variant rounded-lg px-4 py-2 text-white focus:ring-primary">
+                <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">URL репозитория</label>
+                <input type="text" id="source-url" placeholder="https://gitlab.com/..." class="w-full border rounded-lg px-4 py-2 focus:ring-primary focus:outline-none bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-gray-300 dark:border-outline-variant">
             </div>
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Ветка</label>
-                <input type="text" id="source-branch" value="main" class="w-full bg-black/20 border border-outline-variant rounded-lg px-4 py-2 text-white focus:ring-primary">
+                <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">Ветка</label>
+                <input type="text" id="source-branch" value="main" class="w-full border rounded-lg px-4 py-2 focus:ring-primary focus:outline-none bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-gray-300 dark:border-outline-variant">
             </div>
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Локальный путь (опционально)</label>
-                <input type="text" id="source-path" placeholder="/knowledge" class="w-full bg-black/20 border border-outline-variant rounded-lg px-4 py-2 text-white focus:ring-primary">
+                <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">Локальный путь (опционально)</label>
+                <input type="text" id="source-path" placeholder="/knowledge" class="w-full border rounded-lg px-4 py-2 focus:ring-primary focus:outline-none bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-gray-300 dark:border-outline-variant">
             </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">
-            <button onclick="closeSourceModal()" class="px-4 py-2 border border-outline-variant rounded-lg hover:bg-white/5">Отмена</button>
-            <button onclick="addKnowledgeSource()" class="px-4 py-2 bg-primary rounded-lg hover:bg-primary/80">Добавить</button>
+            <button onclick="closeSourceModal()" class="px-4 py-2 border border-gray-300 dark:border-outline-variant rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 transition-all">Отмена</button>
+            <button onclick="addKnowledgeSource()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 transition-all shadow-sm">Добавить</button>
         </div>
     </div>
 </div>
@@ -159,6 +159,9 @@
                 </div>
             </div>
         </div>
+        <div id="ai-disclaimer" class="text-center text-[10px] text-gray-500 mt-3">
+            Сгенерировано ИИ · Информация может быть неточной
+        </div>
     </div>
 </main>
 
@@ -197,17 +200,17 @@
 
 <!-- Модальное окно создания чата -->
 <div id="new-chat-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
-    <div class="bg-surface-container-high rounded-2xl border border-outline-variant p-6 w-full max-w-md shadow-2xl">
-        <h2 class="text-xl font-bold mb-4">Создать новый чат</h2>
+    <div class="bg-white dark:bg-surface-container-high rounded-2xl border border-gray-200 dark:border-outline-variant p-6 w-full max-w-md shadow-2xl">
+        <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-white">Создать новый чат</h2>
         <div class="space-y-4">
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Название чата</label>
-                <input type="text" id="new-chat-title" placeholder="Например: Проектирование микросервисов" class="w-full bg-black/20 border border-outline-variant rounded-lg px-4 py-2 text-white focus:ring-primary focus:outline-none">
+                <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">Название чата</label>
+                <input type="text" id="new-chat-title" placeholder="Например: Проектирование микросервисов" class="w-full border rounded-lg px-4 py-2 focus:ring-primary focus:outline-none bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-gray-300 dark:border-outline-variant">
             </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">
-            <button onclick="closeNewChatModal()" class="px-4 py-2 border border-outline-variant rounded-lg hover:bg-white/5">Отмена</button>
-            <button onclick="confirmCreateChat()" class="px-4 py-2 bg-primary rounded-lg hover:bg-primary/80">Создать</button>
+            <button onclick="closeNewChatModal()" class="px-4 py-2 border border-gray-300 dark:border-outline-variant rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 transition-all">Отмена</button>
+            <button onclick="confirmCreateChat()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 transition-all shadow-sm">Создать</button>
         </div>
     </div>
 </div>
@@ -226,7 +229,7 @@
 
         <!-- Боковое меню -->
         <div class="flex gap-4">
-            <div class="w-40 flex-shrink-0 space-y-1">
+            <div class="w-46 flex-shrink-0 space-y-1">
                 <button onclick="switchSettingsTab('general')" id="tab-general" class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all bg-primary/10 text-primary">
                     <span class="material-symbols-outlined text-sm align-middle mr-2">settings</span>
                     Общие
@@ -253,6 +256,32 @@
                         <button id="theme-toggle-settings" class="w-12 h-6 rounded-full bg-gray-300 dark:bg-primary relative transition-all">
                             <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform dark:translate-x-6"></span>
                         </button>
+                    </div>
+
+                    <div class="p-3 bg-gray-50 dark:bg-white/5 rounded-lg">
+                        <div>
+                            <label class="text-sm font-medium text-gray-900 dark:text-white block mb-2">Язык интерфейса</label>
+                            <div class="relative">
+                                <button id="language-select-btn" class="w-full flex items-center justify-between bg-white dark:bg-black/20 border border-gray-300 dark:border-outline-variant rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:ring-primary focus:outline-none transition-all">
+                                    <span id="language-selected-text" class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-base">language</span>
+                                        Русский
+                                    </span>
+                                    <span class="material-symbols-outlined text-base transition-transform" id="language-arrow">expand_more</span>
+                                </button>
+                                <div id="language-dropdown" class="hidden absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-container-high border border-gray-200 dark:border-outline-variant rounded-lg shadow-lg z-10 overflow-hidden transition-all">
+                                    <div class="language-option py-2 px-4 hover:bg-gray-100 dark:hover:bg-white/5 cursor-pointer transition-all flex items-center gap-2" data-lang="ru">
+                                        <span class="material-symbols-outlined text-base opacity-0">check</span>
+                                        <span>Русский</span>
+                                    </div>
+                                    <div class="language-option py-2 px-4 hover:bg-gray-100 dark:hover:bg-white/5 cursor-pointer transition-all flex items-center gap-2" data-lang="en">
+                                        <span class="material-symbols-outlined text-base opacity-0">check</span>
+                                        <span>English</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Изменение языка требует перезагрузки страницы</p>
+                        </div>
                     </div>
                 </div>
 
@@ -292,14 +321,9 @@
                     <div class="border-t border-gray-200 dark:border-outline-variant pt-3 space-y-1">
                         <button onclick="showTerms()" class="w-full text-left text-sm text-gray-700 dark:text-gray-300 hover:text-primary py-2 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5">📜 Условия использования</button>
                         <button onclick="showPrivacy()" class="w-full text-left text-sm text-gray-700 dark:text-gray-300 hover:text-primary py-2 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5">🔒 Политика конфиденциальности</button>
-                        <button onclick="showLicenses()" class="w-full text-left text-sm text-gray-700 dark:text-gray-300 hover:text-primary py-2 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5">📄 Лицензии</button>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-outline-variant">
-            <button onclick="closeSettingsModal()" class="px-4 py-2 border border-gray-300 dark:border-outline-variant rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300">Закрыть</button>
         </div>
     </div>
 </div>
@@ -340,6 +364,51 @@
         </div>
         <div class="mt-4 flex justify-end">
             <button onclick="closePrivacyModal()" class="px-4 py-2 bg-primary text-white rounded-lg">Понятно</button>
+        </div>
+    </div>
+</div>
+
+<!-- Кастомное уведомление -->
+<div id="custom-toast" class="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-2xl z-50 transition-all duration-300 opacity-0 translate-y-10 pointer-events-none">
+    <span id="toast-message" class="text-sm">Язык изменён</span>
+</div>
+
+<!-- Модальное окно переименования чата -->
+<div id="rename-chat-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
+    <div class="bg-white dark:bg-surface-container-high rounded-2xl border border-gray-200 dark:border-outline-variant p-6 w-full max-w-md shadow-2xl">
+        <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-white">Переименовать чат</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">Новое название</label>
+                <input type="text" id="rename-chat-title" placeholder="Введите новое название" class="w-full border rounded-lg px-4 py-2 focus:ring-primary focus:outline-none bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-gray-300 dark:border-outline-variant">
+            </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button onclick="closeRenameModal()" class="px-4 py-2 border border-gray-300 dark:border-outline-variant rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 transition-all">Отмена</button>
+            <button onclick="confirmRenameChat()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 transition-all shadow-sm">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления чата -->
+<div id="delete-chat-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
+    <div class="bg-white dark:bg-surface-container-high rounded-2xl border border-gray-200 dark:border-outline-variant p-6 w-full max-w-md shadow-2xl">
+        <div class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+                <span class="material-symbols-outlined text-4xl text-red-600 dark:text-red-400">warning</span>
+            </div>
+            <h2 class="text-xl font-bold mb-2 text-gray-900 dark:text-white" id="delete-modal-title">Удалить чат?</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6" id="delete-modal-message">
+                Чат "<span id="delete-chat-name"></span>" будет удалён без возможности восстановления.
+            </p>
+        </div>
+        <div class="flex justify-end gap-3">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 border border-gray-300 dark:border-outline-variant rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 transition-all">
+                Отмена
+            </button>
+            <button onclick="confirmDeleteChat()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all shadow-sm">
+                Удалить
+            </button>
         </div>
     </div>
 </div>
