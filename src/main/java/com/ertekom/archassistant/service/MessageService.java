@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -39,5 +40,20 @@ public class MessageService {
 
     public List<Message> getMessagesByChat(UUID chatId) {
         return messageRepository.findByChat_IdOrderByCreatedAtAsc(chatId);
+    }
+    // Обновление сообщения
+    @Transactional
+    public Message updateMessage(UUID messageId, String newContent) {
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new RuntimeException("Сообщение не найдено: " + messageId));
+        message.setContent(newContent);
+        message.setUpdatedAt(LocalDateTime.now());
+        return messageRepository.save(message);
+    }
+
+    // Удаление сообщения
+    @Transactional
+    public void deleteMessage(UUID messageId) {
+        messageRepository.deleteById(messageId);
     }
 }

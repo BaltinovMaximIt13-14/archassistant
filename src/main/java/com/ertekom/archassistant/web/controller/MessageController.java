@@ -33,4 +33,18 @@ public class MessageController {
     public ResponseEntity<List<Message>> getMessagesByChat(@PathVariable UUID chatId) {
         return ResponseEntity.ok(messageService.getMessagesByChat(chatId));
     }
+
+    // Обновление сообщения (PUT)
+    @PutMapping("/{messageId}")
+    public ResponseEntity<Message> updateMessage(@PathVariable UUID messageId, @RequestBody Map<String, String> request) {
+        String content = request.get("content");
+        return ResponseEntity.ok(messageService.updateMessage(messageId, content));
+    }
+
+    // Удаление сообщения
+    @DeleteMapping("/{messageId}")
+    public ResponseEntity<Map<String, String>> deleteMessage(@PathVariable UUID messageId) {
+        messageService.deleteMessage(messageId);
+        return ResponseEntity.ok(Map.of("message", "Message deleted successfully"));
+    }
 }

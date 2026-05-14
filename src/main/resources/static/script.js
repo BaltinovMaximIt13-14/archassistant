@@ -288,12 +288,18 @@
         container.innerHTML = marked.parse(normalizeAssistantMarkdown(content));
     }
 
-    function appendMessage(role, content) {
+    function appendMessage(role, content, messageId = null) {
         if (!chatWindow) return null;
         const wrapper = document.createElement('div');
         const isAI = role === 'assistant';
-        wrapper.className = `flex ${isAI ? 'justify-start' : 'justify-end'} mb-4`;
-        const htmlContent = isAI ? marked.parse(normalizeAssistantMarkdown(content)) : content;
+
+        // Используем реальный ID из БД (UUID) или генерируем временный
+        const uniqueId = messageId || `temp_${Date.now()}_${Math.random()}`;
+
+        wrapper.className = `message-wrapper flex ${isAI ? 'justify-start' : 'justify-end'} mb-4`;
+        wrapper.setAttribute('data-message-id', uniqueId);
+
+        const htmlContent = isAI ? marked.parse(normalizeAssistantMarkdown(content)) : escapeHtml(content);
 
         const now = new Date();
         const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -305,19 +311,47 @@
             minute: '2-digit'
         });
 
+        // Экранируем содержимое
+        const escapedContent = content.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+
+        // Кнопки действий
+        const actionButtons = `
+        <div class="message-actions" style="justify-content: ${isAI ? 'flex-start' : 'flex-end'}">
+            <button class="message-action-btn" onclick="copyMessageText('${uniqueId}')" title="Копировать">
+                <span class="material-symbols-outlined">content_copy</span>
+            </button>
+            ${!isAI ? `
+            <button class="message-action-btn" onclick="startEditMessage('${uniqueId}', \`${escapedContent}\`, '${role}')" title="Редактировать">
+                <span class="material-symbols-outlined">edit</span>
+            </button>
+            ` : ''}
+        </div>
+    `;
+
+        const aiName = isAI ? '<span class="text-primary font-bold text-[10px] uppercase tracking-widest">ArchAssistant</span>' : '';
+
         wrapper.innerHTML = `
-            <div class="max-w-[85%] min-w-0">
-                <div class="flex items-center gap-2 mb-1 ${isAI ? '' : 'justify-end'}">
-                    ${isAI ? '<span class="text-primary font-bold text-[10px] uppercase tracking-widest">ArchAssistant</span>' : ''}
-                    <span class="text-[10px] text-gray-500 cursor-help" title="${fullDateTime}">${timeString}</span>
-                </div>
-                <div class="${isAI ? 'ai-content' : 'bg-primary p-4 rounded-2xl text-sm text-white border border-white/10 shadow-lg'}">
-                    ${htmlContent}
-                </div>
+        <div class="max-w-[85%] min-w-0">
+            <div class="flex items-center gap-2 mb-1 ${isAI ? '' : 'justify-end'}">
+                ${aiName}
+                <span class="text-[10px] text-gray-500 cursor-help" title="${fullDateTime}">${timeString}</span>
             </div>
-        `;
+            <div class="message-content ${isAI ? 'ai-content' : 'bg-primary p-4 rounded-2xl text-sm text-white border border-white/10 shadow-lg'}">
+                ${htmlContent}
+            </div>
+            ${actionButtons}
+        </div>
+    `;
+
         chatWindow.appendChild(wrapper);
         chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        // Сохраняем оригинальный текст для копирования
+        const contentDiv = wrapper.querySelector('.message-content');
+        if (contentDiv) {
+            contentDiv.setAttribute('data-original-text', content);
+        }
+
         return isAI ? wrapper.querySelector('.ai-content') : null;
     }
 
@@ -1078,7 +1112,6 @@
 
         // Если нет активного чата, создаём новый
         if (!currentChatId) {
-            // Генерируем название из первых 50 символов сообщения
             let chatTitle = text.slice(0, 50);
             if (chatTitle.length === 50) chatTitle += '...';
             const lang = localStorage.getItem('language') || 'ru';
@@ -1102,19 +1135,30 @@
             }
         }
 
-        appendMessage('user', text);
-        if (inputField) {
-            inputField.value = '';
-            inputField.style.height = 'auto';
-        }
-
+        // СНАЧАЛА СОХРАНЯЕМ СООБЩЕНИЕ В БД
+        let savedMessage = null;
         try {
-            await fetch('/api/messages', {
+            const saveRes = await fetch('/api/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chatId: currentChatId, role: 'user', content: text })
             });
-        } catch (e) {}
+            savedMessage = await saveRes.json();
+        } catch (e) {
+            console.error('Ошибка сохранения сообщения:', e);
+        }
+
+        // ПОТОМ ОТОБРАЖАЕМ С РЕАЛЬНЫМ UUID
+        if (savedMessage && savedMessage.id) {
+            appendMessage('user', text, savedMessage.id);
+        } else {
+            appendMessage('user', text);
+        }
+
+        if (inputField) {
+            inputField.value = '';
+            inputField.style.height = 'auto';
+        }
 
         const aiContainer = appendMessage('assistant', '');
         setLoading(true);
@@ -2887,4 +2931,191 @@
             }
         });
     }
+    // ДЛЯ РЕДАКТИРОВАНИЯ СООБЩЕНИЯ
+
+    // Переменные для отслеживания редактирования
+    let editingMessageId = null;
+    let editingOriginalContent = null;
+    let editingOriginalRole = null;
+    window.saveEditMessage = async function() {
+        if (!editingMessageId) return;
+
+        const textarea = document.getElementById(`edit-textarea-${editingMessageId}`);
+        const newText = textarea?.value.trim();
+
+        if (!newText) {
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '❌ Сообщение не может быть пустым' : '❌ Message cannot be empty');
+            return;
+        }
+
+        if (newText === editingOriginalContent) {
+            cancelEditMessage();
+            return;
+        }
+
+        // Сохраняем ссылку на ID перед закрытием
+        const messageIdToUpdate = editingMessageId;
+
+        // Закрываем режим редактирования
+        cancelEditMessage();
+
+        // Обновляем сообщение в базе данных (UUID формат)
+        try {
+            const res = await fetch(`/api/messages/${messageIdToUpdate}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: newText })
+            });
+
+            if (!res.ok) {
+                throw new Error('Ошибка обновления');
+            }
+
+            // Обновляем отображение сообщения
+            const messageDiv = document.querySelector(`[data-message-id="${messageIdToUpdate}"]`);
+            if (messageDiv) {
+                const contentDiv = messageDiv.querySelector('.message-content');
+                contentDiv.innerHTML = escapeHtml(newText);
+                contentDiv.setAttribute('data-original-text', newText);
+            }
+
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '🔄 Отправляю изменённое сообщение...' : '🔄 Sending edited message...');
+
+            // Отправляем изменённое сообщение как новое
+            const newMsgRes = await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chatId: currentChatId, role: 'user', content: newText })
+            });
+
+            const newMsg = await newMsgRes.json();
+
+            // Добавляем новое сообщение пользователя в чат с реальным UUID
+            appendMessage('user', newText, newMsg.id);
+
+            // Генерируем новый ответ
+            const aiContainer = appendMessage('assistant', '');
+            setLoading(true);
+            let fullText = '';
+
+            const url = `/api/ai/stream?message=${encodeURIComponent(newText)}&chatId=${currentChatId}`;
+            currentEventSource = new EventSource(url);
+
+            currentEventSource.onmessage = (e) => {
+                try { fullText += JSON.parse(e.data).content || ''; }
+                catch { fullText += e.data; }
+                renderAssistantMarkdown(aiContainer, fullText);
+                if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+            };
+
+            currentEventSource.onerror = () => {
+                currentEventSource.close();
+                setLoading(false);
+                if (fullText) {
+                    fetch('/api/messages', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chatId: currentChatId, role: 'assistant', content: fullText })
+                    });
+                }
+            };
+
+        } catch (e) {
+            console.error('Ошибка редактирования:', e);
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '❌ Не удалось обновить сообщение' : '❌ Failed to update message');
+        }
+    };
+
+    window.copyMessageText = async function(messageId) {
+        const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (!messageDiv) return;
+
+        const contentDiv = messageDiv.querySelector('.message-content');
+        if (!contentDiv) return;
+
+        // Получаем оригинальный текст из атрибута
+        let textToCopy = contentDiv.getAttribute('data-original-text');
+
+        // Если атрибута нет, пробуем получить из HTML
+        if (!textToCopy) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = contentDiv.innerHTML;
+            textToCopy = tempDiv.textContent || tempDiv.innerText;
+        }
+
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '✅ Текст скопирован' : '✅ Text copied', 1500);
+        } catch (err) {
+            console.error('Ошибка копирования:', err);
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '❌ Не удалось скопировать' : '❌ Failed to copy', 1500);
+        }
+    };
+
+    window.startEditMessage = function(messageId, currentText, role) {
+        // Отменяем предыдущее редактирование, если есть
+        if (editingMessageId) {
+            cancelEditMessage();
+        }
+
+        editingMessageId = messageId;
+        editingOriginalContent = currentText;
+        editingOriginalRole = role;
+
+        const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (!messageDiv) {
+            console.error('Message div not found for id:', messageId);
+            return;
+        }
+
+        const contentDiv = messageDiv.querySelector('.message-content');
+        if (!contentDiv) return;
+
+        // Сохраняем оригинальный HTML
+        contentDiv.setAttribute('data-original-html', contentDiv.innerHTML);
+
+        // Создаём редактор
+        contentDiv.innerHTML = `
+        <div class="message-editing">
+            <textarea id="edit-textarea-${messageId}" rows="3">${escapeHtml(currentText)}</textarea>
+            <div class="message-editing-actions">
+                <button class="message-action-btn" onclick="cancelEditMessage()" title="Отмена">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+                <button class="message-action-btn" onclick="saveEditMessage()" title="Сохранить">
+                    <span class="material-symbols-outlined">check</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+        const textarea = document.getElementById(`edit-textarea-${messageId}`);
+        if (textarea) {
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+    };
+
+    window.cancelEditMessage = function() {
+        if (!editingMessageId) return;
+
+        const messageDiv = document.querySelector(`[data-message-id="${editingMessageId}"]`);
+        if (messageDiv) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            const originalHtml = contentDiv.getAttribute('data-original-html');
+            if (originalHtml) {
+                contentDiv.innerHTML = originalHtml;
+                contentDiv.removeAttribute('data-original-html');
+            }
+        }
+
+        editingMessageId = null;
+        editingOriginalContent = null;
+        editingOriginalRole = null;
+    };
 })();
