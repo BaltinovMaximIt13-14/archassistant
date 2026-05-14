@@ -1155,3 +1155,21 @@ html.dark .message-action-btn:hover {
     margin-top: 8px;
     justify-content: flex-end;
 }
+/* Кнопка бизнес-решения */
+.bg-purple-600 {
+    background-color: #7c3aed;
+}
+
+.bg-purple-600:hover {
+    background-color: #6d28d9;
+}
+
+/* Для светлой темы */
+html:not(.dark) .bg-purple-600 {
+    background-color: #7c3aed;
+    border: 1px solid #d1d5db;
+}
+
+html:not(.dark) .bg-purple-600:hover {
+    background-color: #6d28d9;
+}

@@ -131,4 +131,52 @@ public class AIService {
             return Flux.just("Ошибка при чтении документа: " + e.getMessage());
         }
     }
+
+    public Flux<String> businessSolutionStream(String input, UUID chatId) {
+        try {
+            // Определяем, является ли вход файлом или текстом
+            String userInput = input;
+
+            // Поиск релевантных знаний из базы
+            String searchQuery = input.length() > 1000 ? input.substring(0, 1000) : input;
+            List<String> chunks = searchService.findRelevantChunks(searchQuery, TOP_K);
+            String context = chunks.isEmpty() ? "" : String.join("\n\n---\n\n", chunks);
+            String history = buildHistoryContext(getChatHistory(chatId));
+
+            // Промпт для генерации бизнес-решения
+            String prompt = """
+            Ты — архитектор бизнес-решений и ИТ-стратег. Твоя задача — разработать комплексное бизнес-решение на основе запроса пользователя.
+            
+            %s
+            %s
+            
+            ## ЗАПРОС ПОЛЬЗОВАТЕЛЯ:
+            %s
+            
+            ## ТРЕБОВАНИЯ К ОТВЕТУ:
+            1. **Бизнес-контекст** — опишите проблему/задачу с точки зрения бизнеса
+            2. **Цели и KPI** — какие метрики успеха, как измерять результат
+            3. **Архитектурное решение** — компоненты, интеграции, технологии
+            4. **Дорожная карта** — этапы внедрения, сроки, приоритеты
+            5. **Риски и их mitigation** — какие риски и как их минимизировать
+            6. **Бюджетная оценка** — примерные затраты (лицензии, разработка, поддержка)
+            
+            Ответ должен быть на русском языке, структурированным, практичным и применимым к реальному бизнесу.
+            Используй Markdown для форматирования.
+            
+            ## ОТВЕТ (Бизнес-решение):
+            """.formatted(
+                    context.isEmpty() ? "" : "## БАЗА ЗНАНИЙ (релевантные стандарты и практики):\n" + context,
+                    history.isEmpty() ? "" : "## ИСТОРИЯ ДИАЛОГА:\n" + history,
+                    userInput
+            );
+
+            ChatClient client = ChatClient.builder(chatModel).build();
+            return client.prompt().user(prompt).stream().content();
+
+        } catch (Exception e) {
+            log.error("Ошибка генерации бизнес-решения: {}", e.getMessage(), e);
+            return Flux.just("❌ Ошибка при генерации бизнес-решения: " + e.getMessage());
+        }
+    }
 }

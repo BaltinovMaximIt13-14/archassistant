@@ -3118,4 +3118,207 @@
         editingOriginalContent = null;
         editingOriginalRole = null;
     };
+
+    // кнопка для генерации решения
+    // Генерация бизнес-решения (обычный режим)
+    window.generateBusinessSolution = async function() {
+        const comment = inputField?.value.trim() || '';
+
+        // Если нет активного чата, создаём новый
+        if (!currentChatId) {
+            let chatTitle = '';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            if (comment) {
+                chatTitle = comment.slice(0, 50);
+                if (chatTitle.length === 50) chatTitle += '...';
+            } else if (uploadedFile) {
+                chatTitle = uploadedFile.name.replace(/\.[^/.]+$/, '');
+                if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
+            } else {
+                chatTitle = lang === 'ru' ? 'Бизнес-решение' : 'Business solution';
+            }
+
+            if (!chatTitle || chatTitle.trim() === '') {
+                chatTitle = lang === 'ru' ? 'Бизнес-решение' : 'Business solution';
+            }
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать проект' : '❌ Failed to create project';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
+        // Загрузка файла, если есть
+        if (uploadedFile && !uploadedDocumentId) {
+            try {
+                appendMessage('user', `📎 Загрузка файла "${uploadedFile.name}"...`);
+                const formData = new FormData();
+                formData.append('file', uploadedFile);
+                const uploadRes = await fetch(`/api/documents/upload/${currentChatId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const uploadData = await uploadRes.json();
+                if (!uploadData.success) throw new Error(uploadData.message || 'Ошибка загрузки');
+                uploadedDocumentId = uploadData.documentId;
+                chatWindow?.lastChild?.remove();
+            } catch (err) {
+                const lang = localStorage.getItem('language') || 'ru';
+                const message = lang === 'ru' ? `❌ Ошибка загрузки файла: ${err.message}` : `❌ File upload error: ${err.message}`;
+                showToast(message);
+                return;
+            }
+        }
+
+        // Формируем текст сообщения пользователя
+        let userDisplayText = comment || 'Сгенерировать бизнес-решение';
+        if (uploadedFile) {
+            userDisplayText = `📄 **Файл:** ${uploadedFile.name}` + (comment ? `\n\n**Комментарий:** ${comment}` : '');
+        }
+        appendMessage('user', userDisplayText);
+
+        if (inputField) {
+            inputField.value = '';
+            inputField.style.height = 'auto';
+        }
+
+        try {
+            await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chatId: currentChatId, role: 'user', content: userDisplayText })
+            });
+        } catch (e) {}
+
+        const aiContainer = appendMessage('assistant', '');
+        if (!aiContainer) return;
+
+        setLoading(true);
+        let fullText = '';
+
+        let url;
+        if (uploadedDocumentId) {
+            url = `/api/ai/business?input=${encodeURIComponent(comment)}&chatId=${currentChatId}&documentId=${uploadedDocumentId}`;
+        } else {
+            url = `/api/ai/business?input=${encodeURIComponent(comment)}&chatId=${currentChatId}`;
+        }
+
+        currentEventSource = new EventSource(url);
+
+        currentEventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                fullText += data.content || '';
+            } catch {
+                fullText += event.data;
+            }
+            renderAssistantMarkdown(aiContainer, fullText);
+            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+
+        currentEventSource.onerror = (event) => {
+            currentEventSource.close();
+            setLoading(false);
+            if (fullText) {
+                fetch('/api/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatId: currentChatId, role: 'assistant', content: fullText })
+                });
+            } else {
+                const lang = localStorage.getItem('language') || 'ru';
+                const errorText = lang === 'ru' ? '⚠️ **Ошибка:** не удалось получить ответ от сервера.' : '⚠️ **Error:** failed to get response from server.';
+                renderAssistantMarkdown(aiContainer, errorText);
+            }
+            clearAttachedFile();
+        };
+    };
+
+// Генерация бизнес-решения (центрированный режим)
+    window.generateBusinessSolutionCentered = async function() {
+        const input = document.getElementById('user-input-centered');
+        const comment = input?.value.trim() || '';
+
+        const centeredFileInput = document.getElementById('file-input-centered');
+        const hasFile = centeredFileInput && centeredFileInput.files.length > 0;
+
+        if (!comment && !hasFile) {
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? 'Введите задачу или прикрепите файл' : 'Enter a task or attach a file';
+            showToast(message);
+            return;
+        }
+
+        if (!currentChatId) {
+            let chatTitle = '';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            if (comment) {
+                chatTitle = comment.slice(0, 50);
+                if (chatTitle.length === 50) chatTitle += '...';
+            } else if (hasFile && centeredFileInput.files[0]) {
+                chatTitle = centeredFileInput.files[0].name.replace(/\.[^/.]+$/, '');
+                if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
+            } else {
+                chatTitle = lang === 'ru' ? 'Бизнес-решение' : 'Business solution';
+            }
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                await loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать проект' : '❌ Failed to create project';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
+        switchToChatMode(true);
+
+        const mainInput = document.getElementById('user-input');
+        if (mainInput && comment) {
+            mainInput.value = comment;
+            mainInput.style.height = 'auto';
+        }
+
+        if (hasFile && centeredFileInput.files[0]) {
+            const file = centeredFileInput.files[0];
+            const mainFileInput = document.getElementById('file-input');
+            if (mainFileInput) {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                mainFileInput.files = dataTransfer.files;
+                handleFileSelection(file);
+            }
+        }
+
+        input.value = '';
+        input.style.height = 'auto';
+        if (centeredFileInput) centeredFileInput.value = '';
+
+        await generateBusinessSolution();
+    };
 })();
