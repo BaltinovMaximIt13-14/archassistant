@@ -377,3 +377,308 @@ html:not(.dark) .message-time {
 .flex > div {
     animation: messageAppear 0.3s ease-out;
 }
+
+/* Стили для раскрывающихся файлов */
+.source-chevron,
+.file-chevron {
+    transition: transform 0.2s ease;
+}
+
+.file-contents {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.file-item {
+    transition: all 0.2s;
+}
+
+.file-item:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+.source-files-container {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Стили для модального окна просмотра файла */
+.modal-content {
+    max-height: calc(90vh - 120px);
+    overflow-y: auto;
+}
+
+/* Кастомный скроллбар для модального окна */
+.modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: #0054a6;
+}
+
+/* Убираем серый фон у списка файлов */
+#source-files-list {
+    background: transparent !important;
+}
+
+.file-item {
+    background: transparent !important;
+}
+
+.file-item:hover {
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Светлая тема для файлов */
+html:not(.dark) .file-item:hover {
+    background: rgba(0, 0, 0, 0.03) !important;
+}
+
+html:not(.dark) .file-contents {
+    background: transparent;
+}
+
+/* Текст в модальном окне для светлой темы */
+html:not(.dark) .modal-content-text {
+    color: #1f2937 !important;
+    background: #f9fafb !important;
+}
+
+/* Убираем серый фон у списка файлов для светлой темы */
+html:not(.dark) .source-files-container,
+html:not(.dark) .file-item,
+html:not(.dark) .file-contents {
+    background: transparent !important;
+}
+
+html:not(.dark) .file-item:hover {
+    background: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Стили для контейнера файлов */
+.source-files-container {
+    background: transparent;
+}
+
+.file-item {
+    background: transparent;
+}
+
+/* Текст файлов при светлой теме */
+html:not(.dark) .file-item .text-xs {
+    color: #374151 !important;
+}
+
+/* Иконки при светлой теме */
+html:not(.dark) .file-item .material-symbols-outlined {
+    color: #6b7280 !important;
+}
+
+/* Стили для модального окна создания чата - светлая тема */
+html:not(.dark) .new-chat-modal-content {
+    background-color: #ffffff;
+    color: #1f2937;
+}
+
+html:not(.dark) #new-chat-title {
+    background-color: #f3f4f6 !important;
+    color: #1f2937 !important;
+    border-color: #d1d5db !important;
+}
+
+/* Стили для модального окна создания чата - светлая тема */
+html:not(.dark) #new-chat-modal .bg-surface-container-high {
+    background-color: #ffffff;
+}
+
+html:not(.dark) #new-chat-modal h2 {
+    color: #1f2937;
+}
+
+html:not(.dark) #new-chat-modal label {
+    color: #4b5563;
+}
+
+html:not(.dark) #new-chat-title {
+    background-color: #f9fafb !important;
+    color: #1f2937 !important;
+    border-color: #d1d5db !important;
+}
+
+html:not(.dark) #new-chat-title:focus {
+    border-color: #0054a6 !important;
+    ring-color: #0054a6 !important;
+}
+
+html:not(.dark) #new-chat-modal .border-outline-variant {
+    border-color: #e5e7eb !important;
+}
+
+html:not(.dark) #new-chat-modal button:first-child {
+    color: #4b5563;
+    border-color: #d1d5db;
+}
+
+html:not(.dark) #new-chat-modal button:first-child:hover {
+    background-color: #f3f4f6;
+}
+
+html:not(.dark) #new-chat-modal .bg-primary {
+    background-color: #0054a6;
+}
+
+html:not(.dark) #new-chat-modal .bg-primary:hover {
+    background-color: #003d7a;
+}
+
+/* Стили для списка чатов - тёмная тема */
+html.dark .chat-item {
+    color: #ffffff !important;
+}
+
+html.dark .chat-item .chat-title {
+    color: #ffffff !important;
+}
+
+html.dark .chat-item .material-symbols-outlined {
+    color: #ffffff !important;
+}
+
+/* Стили для списка чатов - светлая тема */
+html:not(.dark) .chat-item {
+    color: #1f2937 !important;
+}
+
+html:not(.dark) .chat-item .chat-title {
+    color: #1f2937 !important;
+}
+
+html:not(.dark) .chat-item .material-symbols-outlined {
+    color: #6b7280 !important;
+}
+
+/* Активный чат в тёмной теме */
+html.dark .chat-item.active {
+    background-color: #0054a6 !important;
+    color: #ffffff !important;
+}
+
+html.dark .chat-item.active .chat-title {
+    color: #ffffff !important;
+}
+
+/* ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ДЛЯ ТЕКСТА ЧАТОВ */
+html.dark .chat-item,
+html.dark .chat-item .chat-title,
+html.dark .chat-list .chat-item,
+html.dark .chat-list .chat-item span,
+html.dark #chat-list .chat-item,
+html.dark #chat-list .chat-item span,
+html.dark [class*="chat-item"] span:not(.material-symbols-outlined) {
+    color: white !important;
+}
+
+/* Для активного чата - фон и текст */
+html.dark .chat-item.active,
+html.dark .chat-item.active .chat-title,
+html.dark .chat-item.active span {
+    color: white !important;
+    background-color: #0054a6 !important;
+}
+
+/* ========== ИСПРАВЛЕНИЯ ДЛЯ СВЕТЛОЙ ТЕМЫ ========== */
+
+/* Обводка для кнопки скрепки */
+html:not(.dark) #attach-btn {
+    border: 1px solid #d1d5db !important;
+    background-color: #ffffff !important;
+}
+
+html:not(.dark) #attach-btn:hover {
+    background-color: #f3f4f6 !important;
+}
+
+/* Обводка для кнопки "Проверить" в светлой теме */
+html:not(.dark) button.bg-green-600 {
+    border: 1px solid #d1d5db !important;
+}
+
+/* Обводка для кнопки отправки в светлой теме */
+html:not(.dark) .bg-primary {
+    border: 1px solid #d1d5db !important;
+}
+
+/* Обводка для кнопок в сайдбаре (Добавить источник) - НЕ для синхронизации */
+html:not(.dark) .sidebar button:not(.sync-btn),
+html:not(.dark) .knowledge-section button:not(.sync-btn) {
+    border: 1px solid #d1d5db !important;
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+}
+
+html:not(.dark) .sidebar button:not(.sync-btn):hover,
+html:not(.dark) .knowledge-section button:not(.sync-btn):hover {
+    background-color: #f3f4f6 !important;
+}
+
+/* Обводка для секции База знаний - общая */
+html:not(.dark) .border-t,
+html:not(.dark) .border-outline-variant {
+    border-color: #e5e7eb !important;
+}
+
+/* Обводка для элементов в сайдбаре */
+html:not(.dark) .source-item {
+    border-color: #e5e7eb !important;
+}
+
+/* Кнопка "Новый чат" в светлой теме */
+html:not(.dark) .btn-new-chat {
+    border: 1px solid #e5e7eb !important;
+    background-color: #1f2937 !important;
+    color: white !important;
+}
+
+/* Кнопки внутри секции знаний (кроме синхронизации) */
+html:not(.dark) #knowledge-section button:not(.sync-btn) {
+    border: 1px solid #d1d5db !important;
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+}
+
+html:not(.dark) #knowledge-section button:not(.sync-btn):hover {
+    background-color: #f3f4f6 !important;
+}
+
+html:not(.dark) button.bg-primary\/20:hover,
+html:not(.dark) .bg-primary\/20:hover,
+html:not(.dark) button.sync-btn:hover,
+html:not(.dark) .sync-btn:hover {
+    background-color: #003d7a !important;
+}
+
+/* Обводка для поля ввода */
+html:not(.dark) .input-box {
+    border: 1px solid #d1d5db !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Обводка для чатов в сайдбаре */
+html:not(.dark) .chat-item {
+    border: 1px solid transparent !important;
+}
+
+html:not(.dark) .chat-item:hover {
+    border-color: #e5e7eb !important;
+}
+

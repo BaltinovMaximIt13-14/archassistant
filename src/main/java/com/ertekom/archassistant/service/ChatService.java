@@ -7,7 +7,9 @@ import com.ertekom.archassistant.repository.DocumentChunkRepository;
 import com.ertekom.archassistant.repository.DocumentRepository;
 import com.ertekom.archassistant.repository.MessageRepository;
 import com.ertekom.archassistant.repository.VectorStoreRepository;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,13 +19,14 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class ChatService {
 
-    private final ChatRepository chatRepository;
-    private final MessageRepository messageRepository;
-    private final DocumentRepository documentRepository;
-    private final DocumentChunkRepository documentChunkRepository;
-    private final VectorStoreRepository vectorStoreRepository;
+    ChatRepository chatRepository;
+    MessageRepository messageRepository;
+    DocumentRepository documentRepository;
+    DocumentChunkRepository documentChunkRepository;
+    VectorStoreRepository vectorStoreRepository;
 
     @Transactional
     public Chat createChat(String title) {
@@ -40,7 +43,7 @@ public class ChatService {
 
     public Chat getChatById(UUID id) {
         return chatRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Chat not found: " + id));
+                .orElseThrow(() -> new RuntimeException("Чат не найден: " + id));
     }
 
     public Chat findById(UUID id) {

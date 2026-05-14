@@ -3,7 +3,9 @@ package com.ertekom.archassistant.web.controller;
 import com.ertekom.archassistant.domain.entity.Document;
 import com.ertekom.archassistant.domain.entity.DocumentChunk;
 import com.ertekom.archassistant.service.DocumentService;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,9 +18,10 @@ import java.util.UUID;
 @RequestMapping("/api/documents")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class DocumentController {
 
-    private final DocumentService documentService;
+    DocumentService documentService;
 
     @PostMapping("/upload/{chatId}")
     public ResponseEntity<Map<String, Object>> uploadDocument(

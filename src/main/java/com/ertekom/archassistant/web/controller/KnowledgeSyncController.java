@@ -3,7 +3,9 @@ package com.ertekom.archassistant.web.controller;
 import com.ertekom.archassistant.domain.entity.KnowledgeSource;
 import com.ertekom.archassistant.repository.KnowledgeSourceRepository;
 import com.ertekom.archassistant.service.learning.GitLabSyncService;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,16 +18,12 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/knowledge/sync")
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class KnowledgeSyncController {
 
-    private final GitLabSyncService syncService;
-    private final KnowledgeSourceRepository sourceRepository;
+    GitLabSyncService syncService;
+    KnowledgeSourceRepository sourceRepository;
 
-    /**
-     * Запустить синхронизацию для конкретного источника знаний по ID.
-     * @param sourceId UUID источника
-     * @return статус операции
-     */
     @PostMapping("/{sourceId}")
     public ResponseEntity<Map<String, String>> syncSource(@PathVariable UUID sourceId) {
         log.info("Получен запрос на синхронизацию источника с ID: {}", sourceId);
@@ -56,10 +54,6 @@ public class KnowledgeSyncController {
         }
     }
 
-    /**
-     * Запустить синхронизацию для всех источников знаний.
-     * @return статус операции
-     */
     @PostMapping("/all")
     public ResponseEntity<Map<String, String>> syncAllSources() {
         log.info("Получен запрос на синхронизацию ВСЕХ источников знаний");

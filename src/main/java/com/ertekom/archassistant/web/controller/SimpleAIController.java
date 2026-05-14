@@ -1,7 +1,9 @@
 package com.ertekom.archassistant.web.controller;
 
 import com.ertekom.archassistant.service.ai.SimpleAIService;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
@@ -12,9 +14,10 @@ import java.util.UUID;
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class SimpleAIController {
 
-    private final SimpleAIService simpleAIService;
+    SimpleAIService simpleAIService;
 
     @GetMapping(value = "/stream", produces = "text/event-stream")
     public Flux<Map<String, String>> stream(@RequestParam String message,

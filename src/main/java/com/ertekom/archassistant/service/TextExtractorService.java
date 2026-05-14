@@ -1,6 +1,8 @@
 package com.ertekom.archassistant.service;
 
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -18,10 +20,11 @@ import java.nio.file.Path;
 
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class TextExtractorService {
 
-    private final Tika tika = new Tika();
-    private final OcrService ocrService;
+    Tika tika = new Tika();
+    OcrService ocrService;
 
     public String extractText(MultipartFile file, String fileName) throws Exception {
         String lowerName = fileName != null ? fileName.toLowerCase() : "";

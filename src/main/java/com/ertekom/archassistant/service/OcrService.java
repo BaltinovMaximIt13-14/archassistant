@@ -4,14 +4,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -50,7 +46,7 @@ public class OcrService {
       }
     } catch (Exception e) {
       available = false;
-      log.warn("Tesseract OCR is not available: {}", e.getMessage());
+      log.warn("Функция распознавания текста Tesseract OCR недоступна: {}", e.getMessage());
     }
 
     return available;
@@ -76,7 +72,7 @@ public class OcrService {
       boolean completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
       if (!completed) {
         process.destroyForcibly();
-        log.warn("Tesseract OCR timed out for {}", imageFile.getName());
+        log.warn("В программе Tesseract OCR истекло время ожидания {}", imageFile.getName());
         return "";
       }
 
@@ -84,45 +80,18 @@ public class OcrService {
       String error = stderr.get(5, TimeUnit.SECONDS).trim();
 
       if (process.exitValue() != 0) {
-        log.warn("Tesseract OCR failed for {}: {}", imageFile.getName(), error);
+        log.warn("В программе Tesseract OCR истекло время ожидания {}: {}", imageFile.getName(), error);
         return "";
       }
       if (!error.isBlank()) {
-        log.debug("Tesseract OCR output for {}: {}", imageFile.getName(), error);
+        log.debug("Результат распознавания текста в Tesseract OCR {}: {}", imageFile.getName(), error);
       }
       return output;
     } catch (Exception e) {
-      log.warn("Tesseract OCR failed for {}: {}", imageFile.getName(), e.getMessage());
+      log.warn("Функция распознавания текста Tesseract OCR не удалась {}: {}", imageFile.getName(), e.getMessage());
       available = false;
       return "";
     }
-  }
-
-  public String recognize(BufferedImage image, String name) {
-    if (!isAvailable()) return "";
-
-    Path tempFile = null;
-    try {
-      tempFile = Files.createTempFile("ocr-" + sanitizeName(name) + "-", ".png");
-      ImageIO.write(image, "png", tempFile.toFile());
-      return recognize(tempFile.toFile());
-    } catch (IOException e) {
-      log.warn("Failed to prepare image for OCR {}: {}", name, e.getMessage());
-      return "";
-    } finally {
-      if (tempFile != null) {
-        try {
-          Files.deleteIfExists(tempFile);
-        } catch (IOException e) {
-          log.debug("Failed to delete OCR temp file {}: {}", tempFile, e.getMessage());
-        }
-      }
-    }
-  }
-
-  private String sanitizeName(String value) {
-    if (value == null || value.isBlank()) return "image";
-    return value.replaceAll("[^A-Za-z0-9._-]", "_");
   }
 
   private String readStream(InputStream inputStream) {

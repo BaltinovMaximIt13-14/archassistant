@@ -2,7 +2,9 @@ package com.ertekom.archassistant.web.controller;
 
 import com.ertekom.archassistant.domain.entity.Message;
 import com.ertekom.archassistant.service.MessageService;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,9 +16,10 @@ import java.util.UUID;
 @RequestMapping("/api/messages")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
 public class MessageController {
 
-    private final MessageService messageService;
+    MessageService messageService;
 
     @PostMapping
     public ResponseEntity<Message> createMessage(@RequestBody Map<String, String> request) {

@@ -8,16 +8,9 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 public interface KnowledgeSourceRepository extends JpaRepository<KnowledgeSource, UUID> {
-
-    Optional<KnowledgeSource> findByRepositoryUrl(String repositoryUrl);
-
-    List<KnowledgeSource> findByLastSyncIsNull();
-
     @Modifying
     @Transactional
     @Query("UPDATE KnowledgeSource ks SET ks.lastSync = :lastSync WHERE ks.id = :id")

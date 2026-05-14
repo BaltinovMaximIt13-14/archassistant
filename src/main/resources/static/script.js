@@ -129,7 +129,7 @@
                 const isActive = currentChatId === chat.id;
                 const div = document.createElement('div');
                 div.className = `p-3 rounded-xl cursor-pointer transition-all flex items-center gap-3 text-sm ${
-                    isActive ? 'bg-[#0054a6] text-white shadow-md' : 'text-gray-500 hover:bg-black/5 dark:hover:bg-white/5'
+                    isActive ? 'bg-[#0054a6] text-white shadow-md' : 'text-gray-500 dark:text-white hover:bg-black/5 dark:hover:bg-white/5'
                 }`;
                 div.innerHTML = `<span class="material-symbols-outlined text-[18px]">chat</span><span class="truncate">${chat.title || 'Без названия'}</span>`;
                 div.onclick = () => selectChat(chat.id, chat.title);
@@ -1000,17 +1000,73 @@
         };
     };
 
-    window.createNewChat = async function() {
-        const title = prompt("Введите название задачи:");
-        if (!title) return;
-        const res = await fetch('/api/chats', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title })
-        });
-        const chat = await res.json();
-        selectChat(chat.id, chat.title);
+    window.openNewChatModal = function() {
+        const modal = document.getElementById('new-chat-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            const input = document.getElementById('new-chat-title');
+            if (input) {
+                input.value = '';
+                input.focus();
+            }
+        }
     };
+
+    window.closeNewChatModal = function() {
+        const modal = document.getElementById('new-chat-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    };
+
+    window.confirmCreateChat = async function() {
+        const input = document.getElementById('new-chat-title');
+        const title = input?.value.trim();
+
+        if (!title) {
+            alert('Введите название чата');
+            return;
+        }
+
+        closeNewChatModal();
+
+        try {
+            const res = await fetch('/api/chats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title })
+            });
+            const chat = await res.json();
+            selectChat(chat.id, chat.title);
+        } catch (e) {
+            console.error('Ошибка создания чата:', e);
+            alert('Не удалось создать чат');
+        }
+    };
+
+    // Старая функция createNewChat заменена на openNewChatModal
+    window.createNewChat = window.openNewChatModal;
+
+    // Enter в модальном окне создания чата
+    const newChatInput = document.getElementById('new-chat-title');
+    if (newChatInput) {
+        newChatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmCreateChat();
+            }
+        });
+    }
+
+    // Закрытие модального окна по клику на фон
+    const newChatModal = document.getElementById('new-chat-modal');
+    if (newChatModal) {
+        newChatModal.addEventListener('click', (e) => {
+            if (e.target === newChatModal) {
+                closeNewChatModal();
+            }
+        });
+    }
 
     if (inputField) {
         inputField.addEventListener('keydown', (e) => {
@@ -1054,24 +1110,27 @@
         container.innerHTML = sources.map(source => {
             const displayName = namesMap[source.id] || source.repositoryUrl.split('/').pop() || 'Источник';
             return `
-            <div class="group flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-all border border-outline-variant/50">
-                <div class="flex items-center gap-2 overflow-hidden">
-                    <span class="material-symbols-outlined text-gray-400 text-base">folder</span>
-                    <span class="truncate" title="${source.repositoryUrl}">${escapeHtml(displayName)}</span>
+            <div class="source-item border border-outline-variant/70 rounded-lg overflow-hidden mb-2">
+                <div class="flex items-center justify-between p-2 hover:bg-white/5 transition-all">
+                    <div class="flex items-center gap-2 overflow-hidden cursor-pointer flex-1" onclick="window.toggleSourceFiles('${source.id}', this)">
+                        <span class="source-chevron material-symbols-outlined text-gray-400 text-sm transition-transform">expand_more</span>
+                        <span class="material-symbols-outlined text-gray-400 text-base">folder</span>
+                        <span class="truncate text-sm" title="${source.repositoryUrl}">${escapeHtml(displayName)}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button onclick="event.stopPropagation(); window.syncKnowledgeSource('${source.id}')" class="p-1 hover:bg-primary/20 rounded" title="Синхронизировать">
+                            <span class="material-symbols-outlined text-sm">sync</span>
+                        </button>
+                        <button onclick="event.stopPropagation(); window.deleteKnowledgeSource('${source.id}')" class="p-1 hover:bg-red-500/20 rounded text-red-400" title="Удалить">
+                            <span class="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onclick="syncKnowledgeSource('${source.id}')" class="p-1 hover:bg-primary/20 rounded" title="Синхронизировать">
-                        <span class="material-symbols-outlined text-sm">sync</span>
-                    </button>
-                    <button onclick="deleteKnowledgeSource('${source.id}')" class="p-1 hover:bg-red-500/20 rounded text-red-400" title="Удалить">
-                        <span class="material-symbols-outlined text-sm">delete</span>
-                    </button>
-                </div>
+                <div id="source-files-${source.id}" class="source-files-container hidden p-2 pt-0 space-y-1 bg-black/10"></div>
             </div>
-        `;
+            `;
         }).join('');
     }
-
     function getLocalNamesMap() {
         try {
             return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
@@ -1220,4 +1279,200 @@
     loadChats();
     loadKnowledgeSources();
     initSidebarState();
+
+    // ========== ПРОСМОТР ФАЙЛОВ ИСТОЧНИКА ==========
+
+    window.toggleSourceFiles = async function(sourceId, btnElement) {
+        const container = document.getElementById(`source-files-${sourceId}`);
+        const chevron = btnElement.querySelector('.source-chevron');
+
+        if (!container) return;
+
+        if (container.classList.contains('hidden')) {
+            container.classList.remove('hidden');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+            await window.loadSourceFiles(sourceId);
+        } else {
+            container.classList.add('hidden');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+    };
+
+    window.loadSourceFiles = async function(sourceId) {
+        const container = document.getElementById(`source-files-${sourceId}`);
+        if (!container) return;
+
+        // Убираем bg-black/10, делаем прозрачным
+        container.className = 'source-files-container p-2 pt-0 space-y-1';
+
+        container.innerHTML = '<div class="text-center py-2 text-gray-500 text-xs">Загрузка файлов...</div>';
+
+        try {
+            const res = await fetch(`/api/knowledge-sources/${sourceId}/files`);
+            if (!res.ok) throw new Error('Ошибка загрузки');
+            const files = await res.json();
+
+            if (!files || files.length === 0) {
+                container.innerHTML = '<div class="text-center py-2 text-gray-500 text-xs">Нет файлов</div>';
+                return;
+            }
+
+            container.innerHTML = files.map(file => `
+                <div class="file-item ml-4 border-l border-outline-variant pl-2 mb-1">
+                    <div class="flex items-center justify-between py-1 hover:bg-white/5 rounded px-2">
+                        <div class="flex items-center gap-2 flex-1 cursor-pointer" onclick="window.toggleFileContents('${file.id}', this, '${escapeHtml(file.fileName).replace(/'/g, "\\'")}')">
+                            <span class="material-symbols-outlined text-gray-500 text-sm">${window.getFileIcon(file.fileName)}</span>
+                            <span class="text-xs truncate max-w-[150px]" title="${escapeHtml(file.fileName)}">${escapeHtml(file.fileName)}</span>
+                            <span class="file-chevron material-symbols-outlined text-gray-500 text-sm transition-transform">expand_more</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); window.showFileModal('${file.id}', '${escapeHtml(file.fileName).replace(/'/g, "\\'")}')" class="p-1 hover:bg-primary/20 rounded transition-all" title="Просмотреть в полном окне">
+                            <span class="material-symbols-outlined text-sm text-gray-400 hover:text-primary">visibility</span>
+                        </button>
+                    </div>
+                    <div id="file-contents-${file.id}" class="file-contents hidden pl-6 space-y-1 mt-1 mb-2"></div>
+                </div>
+            `).join('');
+
+            // Применяем стили для светлой темы к контейнеру
+            const isDark = document.documentElement.classList.contains('dark');
+            if (!isDark) {
+                container.style.background = 'transparent';
+            }
+
+        } catch (e) {
+            console.error(e);
+            container.innerHTML = '<div class="text-center py-2 text-red-500 text-xs">Ошибка загрузки</div>';
+        }
+    };
+
+    window.toggleFileContents = async function(fileId, btnElement, fileName) {
+        const container = document.getElementById(`file-contents-${fileId}`);
+        const chevron = btnElement.querySelector('.file-chevron');
+
+        if (!container) return;
+
+        if (container.classList.contains('hidden')) {
+            container.classList.remove('hidden');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+            await window.loadFileContents(fileId, fileName);
+        } else {
+            container.classList.add('hidden');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+    };
+
+    window.loadFileContents = async function(fileId, fileName) {
+        const container = document.getElementById(`file-contents-${fileId}`);
+        if (!container) return;
+
+        container.innerHTML = '<div class="text-center py-2 text-gray-500 text-xs">Загрузка содержимого...</div>';
+
+        try {
+            const res = await fetch(`/api/knowledge-sources/files/${fileId}/contents`);
+            if (!res.ok) throw new Error('Ошибка загрузки');
+            const contents = await res.json();
+
+            if (!contents || contents.length === 0) {
+                container.innerHTML = '<div class="text-center py-2 text-gray-500 text-xs">Нет содержимого</div>';
+                return;
+            }
+
+            // Объединяем все чанки в один текст
+            const fullText = contents.map(chunk => chunk.chunkContent).join('\n\n');
+            const textLength = fullText.length;
+
+            // Текстовая тема
+            const isDark = document.documentElement.classList.contains('dark');
+            const bgClass = isDark ? 'bg-black/30' : 'bg-gray-100';
+            const textClass = isDark ? 'text-gray-300' : 'text-gray-800';
+            const borderClass = isDark ? 'border-outline-variant/50' : 'border-gray-300';
+
+            container.innerHTML = `
+                <div class="${bgClass} rounded p-2 text-[12px] ${textClass} border ${borderClass}">
+                    <div class="flex justify-between items-center mb-2 pb-2 border-b ${borderClass}">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-sm">description</span>
+                            <span class="text-primary text-xs font-mono">${escapeHtml(fileName || 'Файл')}</span>
+                        </div>
+                        <span class="text-[10px] text-gray-500">${textLength} символов</span>
+                    </div>
+                    <div class="whitespace-pre-wrap break-words max-h-96 overflow-y-auto" style="font-family: monospace; font-size: 11px; line-height: 1.5;">
+                        ${escapeHtml(fullText)}
+                    </div>
+                </div>
+            `;
+
+        } catch (e) {
+            console.error(e);
+            container.innerHTML = '<div class="text-center py-2 text-red-500 text-xs">Ошибка загрузки</div>';
+        }
+    };
+
+    window.getFileIcon = function(fileName) {
+        if (!fileName) return 'insert_drive_file';
+        const ext = fileName.split('.').pop()?.toLowerCase();
+        if (ext === 'pdf') return 'picture_as_pdf';
+        if (ext === 'docx' || ext === 'doc') return 'description';
+        if (ext === 'txt' || ext === 'md') return 'text_snippet';
+        if (ext === 'odt') return 'document_scanner';
+        return 'insert_drive_file';
+    };
+
+    window.showFileModal = async function(fileId, fileName) {
+        // Определяем тему
+        const isDark = document.documentElement.classList.contains('dark');
+        const bgModalClass = isDark ? 'bg-surface-container-high' : 'bg-white';
+        const textClass = isDark ? 'text-gray-300' : 'text-gray-800';
+        const textContentClass = isDark ? 'text-gray-300' : 'text-gray-800';
+
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4';
+        modal.onclick = (e) => {
+            if (e.target === modal) modal.remove();
+        };
+
+        const modalContentId = `modal-content-${fileId}`;
+
+        modal.innerHTML = `
+            <div class="${bgModalClass} rounded-xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl">
+                <div class="flex justify-between items-center p-4 border-b border-outline-variant">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">description</span>
+                        <h3 class="font-bold text-lg ${textClass}">${escapeHtml(fileName)}</h3>
+                    </div>
+                    <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600 transition-all">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-4 overflow-y-auto flex-1" id="${modalContentId}">
+                    <div class="text-center py-8 text-gray-400">Загрузка содержимого...</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        try {
+            const res = await fetch(`/api/knowledge-sources/files/${fileId}/contents`);
+            if (!res.ok) throw new Error('Ошибка загрузки');
+            const contents = await res.json();
+
+            if (!contents || contents.length === 0) {
+                document.getElementById(modalContentId).innerHTML = '<div class="text-center py-8 text-gray-400">Нет содержимого</div>';
+                return;
+            }
+
+            const fullText = contents.map(chunk => chunk.chunkContent).join('\n\n');
+            const bgContentClass = isDark ? 'bg-black/20' : 'bg-gray-50';
+
+            document.getElementById(modalContentId).innerHTML = `
+                <div class="${bgContentClass} rounded p-4 ${textContentClass} font-mono text-sm whitespace-pre-wrap break-words" style="line-height: 1.6; max-height: calc(90vh - 120px); overflow-y: auto;">
+                    ${escapeHtml(fullText)}
+                </div>
+            `;
+        } catch (e) {
+            document.getElementById(modalContentId).innerHTML = `<div class="text-center py-8 text-red-400">Ошибка загрузки: ${e.message}</div>`;
+        }
+    };
+
+
 })();
