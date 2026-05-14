@@ -45,4 +45,7 @@ public class Chat {
     @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<Message> messages = new ArrayList<>();
+
+    @Column(name = "pinned")
+    private boolean pinned = false;
 }

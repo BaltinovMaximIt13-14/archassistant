@@ -9,10 +9,8 @@ import java.util.List;
 import java.util.UUID;
 
 public interface MessageRepository extends JpaRepository<Message, UUID> {
-
     List<Message> findByChat_IdOrderByCreatedAtAsc(UUID chatId);
 
-    @Modifying
     @Transactional
     void deleteByChat_Id(UUID chatId);
 }

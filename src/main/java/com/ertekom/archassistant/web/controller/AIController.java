@@ -41,4 +41,12 @@ public class AIController {
         return AIService.validateDocumentStream(documentId, message, chatId)
                 .map(text -> Map.of("content", text));
     }
+
+
+    @GetMapping(value = "/business", produces = "text/event-stream")
+    public Flux<Map<String, String>> generateBusinessSolution(@RequestParam String input,
+                                                              @RequestParam(required = false) UUID chatId) {
+        return AIService.businessSolutionStream(input, chatId)
+                .map(text -> Map.of("content", text));
+    }
 }

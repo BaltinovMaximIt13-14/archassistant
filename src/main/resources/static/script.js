@@ -192,7 +192,6 @@
                 chat.classList.add('active-chat');
                 chat.classList.add('bg-[#0054a6]', 'text-white', 'shadow-md');
                 chat.classList.remove('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
-                // Обновляем стиль кнопки меню
                 const menuBtn = chat.querySelector('.chat-menu-btn');
                 if (menuBtn) {
                     menuBtn.classList.add('text-white/70', 'hover:text-white');
@@ -201,7 +200,6 @@
                 chat.classList.remove('active-chat');
                 chat.classList.remove('bg-[#0054a6]', 'text-white', 'shadow-md');
                 chat.classList.add('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
-                // Обновляем стиль кнопки меню
                 const menuBtn = chat.querySelector('.chat-menu-btn');
                 if (menuBtn) {
                     menuBtn.classList.remove('text-white/70', 'hover:text-white');
@@ -214,16 +212,39 @@
             const res = await fetch(`/api/messages/chat/${id}`);
             const messages = await res.json();
             let lastValidationReport = null;
-            messages.forEach(msg => {
-                appendMessage(msg.role, msg.content);
-                if (msg.role === 'assistant' && looksLikeValidationReport(msg.content)) {
-                    lastValidationReport = msg.content;
+
+            if (messages.length === 0) {
+                // Если нет сообщений - показываем пустое состояние
+                const emptyState = document.getElementById('empty-state');
+                const chatMode = document.getElementById('chat-mode');
+                if (emptyState && chatMode) {
+                    emptyState.classList.remove('hidden');
+                    emptyState.style.opacity = '1';
+                    chatMode.classList.add('hidden');
                 }
-            });
-            if (lastValidationReport) {
-                parseAndDisplayValidationResults(lastValidationReport, { openPanel: false });
             } else {
-                resetValidationPanel();
+                // Если есть сообщения - переключаем в режим чата
+                const emptyState = document.getElementById('empty-state');
+                const chatMode = document.getElementById('chat-mode');
+                if (emptyState && chatMode) {
+                    emptyState.classList.add('hidden');
+                    chatMode.classList.remove('hidden');
+                    chatMode.style.opacity = '1';
+                }
+
+                // Загружаем сообщения
+                messages.forEach(msg => {
+                    appendMessage(msg.role, msg.content);
+                    if (msg.role === 'assistant' && looksLikeValidationReport(msg.content)) {
+                        lastValidationReport = msg.content;
+                    }
+                });
+
+                if (lastValidationReport) {
+                    parseAndDisplayValidationResults(lastValidationReport, { openPanel: false });
+                } else {
+                    resetValidationPanel();
+                }
             }
         } catch (e) {
             console.error('Ошибка загрузки сообщений:', e);
@@ -267,12 +288,18 @@
         container.innerHTML = marked.parse(normalizeAssistantMarkdown(content));
     }
 
-    function appendMessage(role, content) {
+    function appendMessage(role, content, messageId = null) {
         if (!chatWindow) return null;
         const wrapper = document.createElement('div');
         const isAI = role === 'assistant';
-        wrapper.className = `flex ${isAI ? 'justify-start' : 'justify-end'} mb-4`;
-        const htmlContent = isAI ? marked.parse(normalizeAssistantMarkdown(content)) : content;
+
+        // Используем реальный ID из БД (UUID) или генерируем временный
+        const uniqueId = messageId || `temp_${Date.now()}_${Math.random()}`;
+
+        wrapper.className = `message-wrapper flex ${isAI ? 'justify-start' : 'justify-end'} mb-4`;
+        wrapper.setAttribute('data-message-id', uniqueId);
+
+        const htmlContent = isAI ? marked.parse(normalizeAssistantMarkdown(content)) : escapeHtml(content);
 
         const now = new Date();
         const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -284,19 +311,47 @@
             minute: '2-digit'
         });
 
+        // Экранируем содержимое
+        const escapedContent = content.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+
+        // Кнопки действий
+        const actionButtons = `
+        <div class="message-actions" style="justify-content: ${isAI ? 'flex-start' : 'flex-end'}">
+            <button class="message-action-btn" onclick="copyMessageText('${uniqueId}')" title="Копировать">
+                <span class="material-symbols-outlined">content_copy</span>
+            </button>
+            ${!isAI ? `
+            <button class="message-action-btn" onclick="startEditMessage('${uniqueId}', \`${escapedContent}\`, '${role}')" title="Редактировать">
+                <span class="material-symbols-outlined">edit</span>
+            </button>
+            ` : ''}
+        </div>
+    `;
+
+        const aiName = isAI ? '<span class="text-primary font-bold text-[10px] uppercase tracking-widest">ArchAssistant</span>' : '';
+
         wrapper.innerHTML = `
-            <div class="max-w-[85%] min-w-0">
-                <div class="flex items-center gap-2 mb-1 ${isAI ? '' : 'justify-end'}">
-                    ${isAI ? '<span class="text-primary font-bold text-[10px] uppercase tracking-widest">ArchAssistant</span>' : ''}
-                    <span class="text-[10px] text-gray-500 cursor-help" title="${fullDateTime}">${timeString}</span>
-                </div>
-                <div class="${isAI ? 'ai-content' : 'bg-primary p-4 rounded-2xl text-sm text-white border border-white/10 shadow-lg'}">
-                    ${htmlContent}
-                </div>
+        <div class="max-w-[85%] min-w-0">
+            <div class="flex items-center gap-2 mb-1 ${isAI ? '' : 'justify-end'}">
+                ${aiName}
+                <span class="text-[10px] text-gray-500 cursor-help" title="${fullDateTime}">${timeString}</span>
             </div>
-        `;
+            <div class="message-content ${isAI ? 'ai-content' : 'bg-primary p-4 rounded-2xl text-sm text-white border border-white/10 shadow-lg'}">
+                ${htmlContent}
+            </div>
+            ${actionButtons}
+        </div>
+    `;
+
         chatWindow.appendChild(wrapper);
         chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        // Сохраняем оригинальный текст для копирования
+        const contentDiv = wrapper.querySelector('.message-content');
+        if (contentDiv) {
+            contentDiv.setAttribute('data-original-text', content);
+        }
+
         return isAI ? wrapper.querySelector('.ai-content') : null;
     }
 
@@ -1057,7 +1112,6 @@
 
         // Если нет активного чата, создаём новый
         if (!currentChatId) {
-            // Генерируем название из первых 50 символов сообщения
             let chatTitle = text.slice(0, 50);
             if (chatTitle.length === 50) chatTitle += '...';
             const lang = localStorage.getItem('language') || 'ru';
@@ -1081,19 +1135,30 @@
             }
         }
 
-        appendMessage('user', text);
-        if (inputField) {
-            inputField.value = '';
-            inputField.style.height = 'auto';
-        }
-
+        // СНАЧАЛА СОХРАНЯЕМ СООБЩЕНИЕ В БД
+        let savedMessage = null;
         try {
-            await fetch('/api/messages', {
+            const saveRes = await fetch('/api/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chatId: currentChatId, role: 'user', content: text })
             });
-        } catch (e) {}
+            savedMessage = await saveRes.json();
+        } catch (e) {
+            console.error('Ошибка сохранения сообщения:', e);
+        }
+
+        // ПОТОМ ОТОБРАЖАЕМ С РЕАЛЬНЫМ UUID
+        if (savedMessage && savedMessage.id) {
+            appendMessage('user', text, savedMessage.id);
+        } else {
+            appendMessage('user', text);
+        }
+
+        if (inputField) {
+            inputField.value = '';
+            inputField.style.height = 'auto';
+        }
 
         const aiContainer = appendMessage('assistant', '');
         setLoading(true);
@@ -1128,24 +1193,60 @@
 
     window.createNewChat = async function() {
         const lang = localStorage.getItem('language') || 'ru';
-        const defaultTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
 
-        try {
-            const res = await fetch('/api/chats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: defaultTitle })
-            });
-            const chat = await res.json();
-            selectChat(chat.id, chat.title);
+        // Сбрасываем текущий чат (делаем вид, что чата нет)
+        currentChatId = null;
 
-            const message = lang === 'ru' ? '✅ Чат создан' : '✅ Chat created';
-            showToast(message, 1500);
-        } catch (e) {
-            console.error('Ошибка создания чата:', e);
-            const message = lang === 'ru' ? '❌ Не удалось создать чат' : '❌ Failed to create chat';
-            showToast(message);
+        // Очищаем окно с сообщениями
+        if (chatWindow) chatWindow.innerHTML = '';
+
+        // Сбрасываем панель валидации
+        resetValidationPanel();
+
+        // Сбрасываем заголовок
+        if (titleEl) titleEl.innerText = lang === 'ru' ? 'Новый чат' : 'New chat';
+
+        // Показываем пустое состояние (центрированный логотип и поле ввода)
+        const emptyState = document.getElementById('empty-state');
+        const chatMode = document.getElementById('chat-mode');
+
+        if (emptyState && chatMode) {
+            emptyState.classList.remove('hidden');
+            emptyState.style.opacity = '1';
+            chatMode.classList.add('hidden');
+
+            // Очищаем центрированное поле ввода
+            const centeredInput = document.getElementById('user-input-centered');
+            if (centeredInput) {
+                centeredInput.value = '';
+                centeredInput.style.height = 'auto';
+                centeredInput.placeholder = lang === 'ru' ? 'Задайте вопрос или опишите задачу...' : 'Ask a question or describe the task...';
+                centeredInput.focus();
+            }
+
+            // Очищаем прикреплённый файл в центрированном поле
+            const centeredFileInput = document.getElementById('file-input-centered');
+            if (centeredFileInput) centeredFileInput.value = '';
         }
+
+        // Убираем выделение со всех чатов в списке
+        const allChats = document.querySelectorAll('.chat-item');
+        allChats.forEach(chat => {
+            chat.classList.remove('active-chat', 'bg-[#0054a6]', 'text-white', 'shadow-md');
+            chat.classList.add('text-gray-500', 'dark:text-white', 'hover:bg-black/5', 'dark:hover:bg-white/5');
+        });
+
+        // Очищаем обычное поле ввода на всякий случай
+        if (inputField) {
+            inputField.value = '';
+            inputField.style.height = 'auto';
+        }
+
+        // Показываем уведомление
+        const message = lang === 'ru' ? '🆕 Начните новый диалог' : '🆕 Start a new conversation';
+        showToast(message, 1500);
+        // Очищаем центрированный файл
+        clearCenteredAttachedFile();
     };
 
     // Enter в модальном окне создания чата
@@ -1868,7 +1969,8 @@
                 'source-path': 'Локальный путь (опционально)',
                 'add-source-title': 'Добавить источник знаний',
                 'ai-disclaimer': 'Сгенерировано ИИ · Информация может быть неточной',
-                'logo-title': 'ЭР-Ассистент'
+                'logo-title': 'ЭР-Ассистент',
+                'app-name': 'ЭР-Ассистент'
             },
             en: {
                 'new-chat': 'New chat',
@@ -1920,17 +2022,31 @@
                 'source-path': 'Local path (optional)',
                 'add-source-title': 'Add knowledge source',
                 'ai-disclaimer': 'Generated by AI · Information may be inaccurate',
-                'logo-title': 'ER-Assistant'
+                'logo-title': 'ER-Assistant',
+                'app-name': 'ER-Assistant'
             }
         };
 
         const t = translations[lang] || translations.ru;
 
 
-        // Логотип / название в сайдбаре
-        const logoTitle = document.getElementById('logo-title');
-        if (logoTitle) {
-            logoTitle.textContent = t['logo-title'];
+
+        // Обновление ER-Assistant в центрированном режиме
+        const centeredLogoTitle = document.querySelector('#empty-state h1');
+        if (centeredLogoTitle) {
+            centeredLogoTitle.textContent = t['app-name'];
+        }
+
+// Обновление логотипа в сайдбаре
+        const sidebarLogoTitle = document.getElementById('logo-title');
+        if (sidebarLogoTitle) {
+            sidebarLogoTitle.textContent = t['logo-title'];
+        }
+
+// Обновление текста в хедере если есть
+        const headerLogo = document.querySelector('.logo-text');
+        if (headerLogo && headerLogo !== sidebarLogoTitle) {
+            headerLogo.textContent = t['logo-title'];
         }
 
         // Подпись "Сгенерировано ИИ"
@@ -2191,15 +2307,11 @@
         }
     }
 
-    // Инициализация языка
     function initLanguage() {
-        const langSelect = document.getElementById('language-select');
-        if (langSelect) {
-            langSelect.onchange = () => {
-                saveLanguage();
-            };
-        }
-        loadLanguage();
+        // Загружаем сохранённый язык
+        const savedLang = localStorage.getItem('language') || 'ru';
+        applyLanguage(savedLang);
+
     }
 
     initLanguage();
@@ -2260,6 +2372,8 @@
 
                 // Сохраняем язык
                 localStorage.setItem('language', lang);
+
+                // Применяем язык ко всему интерфейсу
                 applyLanguage(lang);
 
                 // Показываем уведомление о перезагрузке
@@ -2291,6 +2405,9 @@
             const checkIcon = activeOption.querySelector('.material-symbols-outlined');
             if (checkIcon) checkIcon.classList.remove('opacity-0');
         }
+
+        // Применяем сохранённый язык при загрузке страницы
+        applyLanguage(savedLang);
     }
 
     // Инициализация кастомного селекта языка
@@ -2578,4 +2695,630 @@
             }
         });
     }
+
+    window.handleActionCentered = async function() {
+        const input = document.getElementById('user-input-centered');
+        const text = input?.value.trim();
+
+        // Если есть файл, отправляем как проверку (потому что файл)
+        if (centeredUploadedFile) {
+            await validateSolutionCentered();
+            return;
+        }
+
+        if (!text || isLoading) return;
+
+        // Если нет активного чата, создаём новый
+        if (!currentChatId) {
+            let chatTitle = text.slice(0, 50);
+            if (chatTitle.length === 50) chatTitle += '...';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                await loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать чат' : '❌ Failed to create chat';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
+        // Переключаем в режим чата БЕЗ ПАНЕЛИ
+        switchToChatMode(false);
+
+        // Копируем текст в обычное поле ввода
+        const mainInput = document.getElementById('user-input');
+        if (mainInput) {
+            mainInput.value = text;
+            mainInput.style.height = 'auto';
+        }
+
+        // Очищаем центрированное поле
+        input.value = '';
+        input.style.height = 'auto';
+
+        // Вызываем обычную отправку
+        await handleAction('/api/ai/stream', 'message');
+    };
+
+    window.validateSolutionCentered = async function() {
+        const input = document.getElementById('user-input-centered');
+        const comment = input?.value.trim() || '';
+
+        // Получаем файл из центрированной переменной
+        const hasFile = centeredUploadedFile !== null;
+
+        // Если нет сообщения и нет файла, показываем уведомление
+        if (!comment && !hasFile) {
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? 'Введите задачу или прикрепите файл' : 'Enter a task or attach a file';
+            showToast(message);
+            return;
+        }
+
+        // Если нет активного чата, создаём новый
+        if (!currentChatId) {
+            let chatTitle = '';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            if (comment) {
+                chatTitle = comment.slice(0, 50);
+                if (chatTitle.length === 50) chatTitle += '...';
+            } else if (hasFile && centeredUploadedFile) {
+                chatTitle = centeredUploadedFile.name.replace(/\.[^/.]+$/, '');
+                if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
+            } else {
+                chatTitle = lang === 'ru' ? 'Проверка решения' : 'Solution check';
+            }
+
+            if (!chatTitle || chatTitle.trim() === '') {
+                chatTitle = lang === 'ru' ? 'Новый чат' : 'New chat';
+            }
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                await loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать проект' : '❌ Failed to create project';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
+        // Переключаем в режим чата С ПАНЕЛЬЮ
+        switchToChatMode(true);
+
+        // Копируем комментарий в обычное поле
+        const mainInput = document.getElementById('user-input');
+        if (mainInput && comment) {
+            mainInput.value = comment;
+            mainInput.style.height = 'auto';
+        }
+
+        // Копируем файл из центрированного поля в обычное
+        if (hasFile && centeredUploadedFile) {
+            const file = centeredUploadedFile;
+            const mainFileInput = document.getElementById('file-input');
+            if (mainFileInput) {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                mainFileInput.files = dataTransfer.files;
+                handleFileSelection(file);
+            }
+        }
+
+        // Очищаем центрированное поле и файл
+        input.value = '';
+        input.style.height = 'auto';
+        clearCenteredAttachedFile();
+
+        // Вызываем обычную проверку
+        await validateSolution();
+    };
+    function switchToChatMode(showValidationPanelFlag = false) {
+        const emptyState = document.getElementById('empty-state');
+        const chatMode = document.getElementById('chat-mode');
+
+        if (emptyState && chatMode && !chatMode.classList.contains('hidden')) {
+            return;
+        }
+
+        if (emptyState && chatMode) {
+            emptyState.style.opacity = '0';
+            setTimeout(() => {
+                emptyState.classList.add('hidden');
+                chatMode.classList.remove('hidden');
+                chatMode.style.opacity = '1';
+
+                if (showValidationPanelFlag === true) {
+                    setTimeout(() => {
+                        showValidationPanel();
+                    }, 300);
+                }
+            }, 150);
+        }
+    }
+
+    // DOM элементы для центрированного режима
+    const centeredInput = document.getElementById('user-input-centered');
+    const centeredFileInput = document.getElementById('file-input-centered');
+    const centeredAttachBtn = document.getElementById('attach-btn-centered');
+    const centeredFileIndicator = document.getElementById('file-indicator-centered');
+    const centeredFileNameSpan = document.getElementById('file-name-centered');
+    const centeredClearFileBtn = document.getElementById('clear-file-centered');
+
+    // Переменная для хранения файла в центрированном режиме
+    let centeredUploadedFile = null;
+
+    function handleCenteredFileSelection(file) {
+        centeredUploadedFile = file;
+        if (centeredFileNameSpan) centeredFileNameSpan.textContent = file.name;
+        if (centeredFileIndicator) centeredFileIndicator.classList.remove('hidden');
+        if (centeredInput) centeredInput.placeholder = `Файл "${file.name}" прикреплён. Введите комментарий (необязательно)`;
+    }
+
+    function clearCenteredAttachedFile() {
+        centeredUploadedFile = null;
+        if (centeredFileIndicator) centeredFileIndicator.classList.add('hidden');
+        if (centeredFileNameSpan) centeredFileNameSpan.textContent = '';
+        if (centeredFileInput) centeredFileInput.value = '';
+        if (centeredInput) centeredInput.placeholder = 'Задайте вопрос или опишите задачу...';
+    }
+
+    // Обработчики для центрированного режима
+    if (centeredAttachBtn) {
+        centeredAttachBtn.addEventListener('click', () => centeredFileInput?.click());
+    }
+    if (centeredFileInput) {
+        centeredFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleCenteredFileSelection(e.target.files[0]);
+        });
+    }
+    if (centeredClearFileBtn) {
+        centeredClearFileBtn.addEventListener('click', clearCenteredAttachedFile);
+    }
+
+    // Обработчики для центрированного режима
+    if (centeredAttachBtn) {
+        centeredAttachBtn.addEventListener('click', () => centeredFileInput?.click());
+    }
+    if (centeredFileInput) {
+        centeredFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleCenteredFileSelection(e.target.files[0]);
+        });
+    }
+    if (centeredClearFileBtn) {
+        centeredClearFileBtn.addEventListener('click', clearCenteredAttachedFile);
+    }
+
+    // ========== ОБРАБОТЧИК ENTER ДЛЯ ЦЕНТРИРОВАННОГО ПОЛЯ ==========
+    if (centeredInput) {
+        // Авто-расширение высоты
+        centeredInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        });
+
+        // Отправка по Enter
+        centeredInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                centeredInput.style.height = 'auto';
+                if (centeredUploadedFile) {
+                    validateSolutionCentered();
+                } else {
+                    handleActionCentered();
+                }
+            }
+        });
+    }
+    // ДЛЯ РЕДАКТИРОВАНИЯ СООБЩЕНИЯ
+
+    // Переменные для отслеживания редактирования
+    let editingMessageId = null;
+    let editingOriginalContent = null;
+    let editingOriginalRole = null;
+    window.saveEditMessage = async function() {
+        if (!editingMessageId) return;
+
+        const textarea = document.getElementById(`edit-textarea-${editingMessageId}`);
+        const newText = textarea?.value.trim();
+
+        if (!newText) {
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '❌ Сообщение не может быть пустым' : '❌ Message cannot be empty');
+            return;
+        }
+
+        if (newText === editingOriginalContent) {
+            cancelEditMessage();
+            return;
+        }
+
+        // Сохраняем ссылку на ID перед закрытием
+        const messageIdToUpdate = editingMessageId;
+
+        // Закрываем режим редактирования
+        cancelEditMessage();
+
+        // Обновляем сообщение в базе данных (UUID формат)
+        try {
+            const res = await fetch(`/api/messages/${messageIdToUpdate}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: newText })
+            });
+
+            if (!res.ok) {
+                throw new Error('Ошибка обновления');
+            }
+
+            // Обновляем отображение сообщения
+            const messageDiv = document.querySelector(`[data-message-id="${messageIdToUpdate}"]`);
+            if (messageDiv) {
+                const contentDiv = messageDiv.querySelector('.message-content');
+                contentDiv.innerHTML = escapeHtml(newText);
+                contentDiv.setAttribute('data-original-text', newText);
+            }
+
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '🔄 Отправляю изменённое сообщение...' : '🔄 Sending edited message...');
+
+            // Отправляем изменённое сообщение как новое
+            const newMsgRes = await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chatId: currentChatId, role: 'user', content: newText })
+            });
+
+            const newMsg = await newMsgRes.json();
+
+            // Добавляем новое сообщение пользователя в чат с реальным UUID
+            appendMessage('user', newText, newMsg.id);
+
+            // Генерируем новый ответ
+            const aiContainer = appendMessage('assistant', '');
+            setLoading(true);
+            let fullText = '';
+
+            const url = `/api/ai/stream?message=${encodeURIComponent(newText)}&chatId=${currentChatId}`;
+            currentEventSource = new EventSource(url);
+
+            currentEventSource.onmessage = (e) => {
+                try { fullText += JSON.parse(e.data).content || ''; }
+                catch { fullText += e.data; }
+                renderAssistantMarkdown(aiContainer, fullText);
+                if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+            };
+
+            currentEventSource.onerror = () => {
+                currentEventSource.close();
+                setLoading(false);
+                if (fullText) {
+                    fetch('/api/messages', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chatId: currentChatId, role: 'assistant', content: fullText })
+                    });
+                }
+            };
+
+        } catch (e) {
+            console.error('Ошибка редактирования:', e);
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '❌ Не удалось обновить сообщение' : '❌ Failed to update message');
+        }
+    };
+
+    window.copyMessageText = async function(messageId) {
+        const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (!messageDiv) return;
+
+        const contentDiv = messageDiv.querySelector('.message-content');
+        if (!contentDiv) return;
+
+        // Получаем оригинальный текст из атрибута
+        let textToCopy = contentDiv.getAttribute('data-original-text');
+
+        // Если атрибута нет, пробуем получить из HTML
+        if (!textToCopy) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = contentDiv.innerHTML;
+            textToCopy = tempDiv.textContent || tempDiv.innerText;
+        }
+
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '✅ Текст скопирован' : '✅ Text copied', 1500);
+        } catch (err) {
+            console.error('Ошибка копирования:', err);
+            const lang = localStorage.getItem('language') || 'ru';
+            showToast(lang === 'ru' ? '❌ Не удалось скопировать' : '❌ Failed to copy', 1500);
+        }
+    };
+
+    window.startEditMessage = function(messageId, currentText, role) {
+        // Отменяем предыдущее редактирование, если есть
+        if (editingMessageId) {
+            cancelEditMessage();
+        }
+
+        editingMessageId = messageId;
+        editingOriginalContent = currentText;
+        editingOriginalRole = role;
+
+        const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (!messageDiv) {
+            console.error('Message div not found for id:', messageId);
+            return;
+        }
+
+        const contentDiv = messageDiv.querySelector('.message-content');
+        if (!contentDiv) return;
+
+        // Сохраняем оригинальный HTML
+        contentDiv.setAttribute('data-original-html', contentDiv.innerHTML);
+
+        // Создаём редактор
+        contentDiv.innerHTML = `
+        <div class="message-editing">
+            <textarea id="edit-textarea-${messageId}" rows="3">${escapeHtml(currentText)}</textarea>
+            <div class="message-editing-actions">
+                <button class="message-action-btn" onclick="cancelEditMessage()" title="Отмена">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+                <button class="message-action-btn" onclick="saveEditMessage()" title="Сохранить">
+                    <span class="material-symbols-outlined">check</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+        const textarea = document.getElementById(`edit-textarea-${messageId}`);
+        if (textarea) {
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+    };
+
+    window.cancelEditMessage = function() {
+        if (!editingMessageId) return;
+
+        const messageDiv = document.querySelector(`[data-message-id="${editingMessageId}"]`);
+        if (messageDiv) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            const originalHtml = contentDiv.getAttribute('data-original-html');
+            if (originalHtml) {
+                contentDiv.innerHTML = originalHtml;
+                contentDiv.removeAttribute('data-original-html');
+            }
+        }
+
+        editingMessageId = null;
+        editingOriginalContent = null;
+        editingOriginalRole = null;
+    };
+
+    // кнопка для генерации решения
+    // Генерация бизнес-решения (обычный режим)
+    window.generateBusinessSolution = async function() {
+        const comment = inputField?.value.trim() || '';
+
+        // Если нет активного чата, создаём новый
+        if (!currentChatId) {
+            let chatTitle = '';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            if (comment) {
+                chatTitle = comment.slice(0, 50);
+                if (chatTitle.length === 50) chatTitle += '...';
+            } else if (uploadedFile) {
+                chatTitle = uploadedFile.name.replace(/\.[^/.]+$/, '');
+                if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
+            } else {
+                chatTitle = lang === 'ru' ? 'Бизнес-решение' : 'Business solution';
+            }
+
+            if (!chatTitle || chatTitle.trim() === '') {
+                chatTitle = lang === 'ru' ? 'Бизнес-решение' : 'Business solution';
+            }
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать проект' : '❌ Failed to create project';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
+        // Загрузка файла, если есть
+        if (uploadedFile && !uploadedDocumentId) {
+            try {
+                appendMessage('user', `📎 Загрузка файла "${uploadedFile.name}"...`);
+                const formData = new FormData();
+                formData.append('file', uploadedFile);
+                const uploadRes = await fetch(`/api/documents/upload/${currentChatId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const uploadData = await uploadRes.json();
+                if (!uploadData.success) throw new Error(uploadData.message || 'Ошибка загрузки');
+                uploadedDocumentId = uploadData.documentId;
+                chatWindow?.lastChild?.remove();
+            } catch (err) {
+                const lang = localStorage.getItem('language') || 'ru';
+                const message = lang === 'ru' ? `❌ Ошибка загрузки файла: ${err.message}` : `❌ File upload error: ${err.message}`;
+                showToast(message);
+                return;
+            }
+        }
+
+        // Формируем текст сообщения пользователя
+        let userDisplayText = comment || 'Сгенерировать бизнес-решение';
+        if (uploadedFile) {
+            userDisplayText = `📄 **Файл:** ${uploadedFile.name}` + (comment ? `\n\n**Комментарий:** ${comment}` : '');
+        }
+        appendMessage('user', userDisplayText);
+
+        if (inputField) {
+            inputField.value = '';
+            inputField.style.height = 'auto';
+        }
+
+        try {
+            await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chatId: currentChatId, role: 'user', content: userDisplayText })
+            });
+        } catch (e) {}
+
+        const aiContainer = appendMessage('assistant', '');
+        if (!aiContainer) return;
+
+        setLoading(true);
+        let fullText = '';
+
+        let url;
+        if (uploadedDocumentId) {
+            url = `/api/ai/business?input=${encodeURIComponent(comment)}&chatId=${currentChatId}&documentId=${uploadedDocumentId}`;
+        } else {
+            url = `/api/ai/business?input=${encodeURIComponent(comment)}&chatId=${currentChatId}`;
+        }
+
+        currentEventSource = new EventSource(url);
+
+        currentEventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                fullText += data.content || '';
+            } catch {
+                fullText += event.data;
+            }
+            renderAssistantMarkdown(aiContainer, fullText);
+            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+
+        currentEventSource.onerror = (event) => {
+            currentEventSource.close();
+            setLoading(false);
+            if (fullText) {
+                fetch('/api/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatId: currentChatId, role: 'assistant', content: fullText })
+                });
+            } else {
+                const lang = localStorage.getItem('language') || 'ru';
+                const errorText = lang === 'ru' ? '⚠️ **Ошибка:** не удалось получить ответ от сервера.' : '⚠️ **Error:** failed to get response from server.';
+                renderAssistantMarkdown(aiContainer, errorText);
+            }
+            clearAttachedFile();
+        };
+    };
+
+// Генерация бизнес-решения (центрированный режим)
+    window.generateBusinessSolutionCentered = async function() {
+        const input = document.getElementById('user-input-centered');
+        const comment = input?.value.trim() || '';
+
+        const centeredFileInput = document.getElementById('file-input-centered');
+        const hasFile = centeredFileInput && centeredFileInput.files.length > 0;
+
+        if (!comment && !hasFile) {
+            const lang = localStorage.getItem('language') || 'ru';
+            const message = lang === 'ru' ? 'Введите задачу или прикрепите файл' : 'Enter a task or attach a file';
+            showToast(message);
+            return;
+        }
+
+        if (!currentChatId) {
+            let chatTitle = '';
+            const lang = localStorage.getItem('language') || 'ru';
+
+            if (comment) {
+                chatTitle = comment.slice(0, 50);
+                if (chatTitle.length === 50) chatTitle += '...';
+            } else if (hasFile && centeredFileInput.files[0]) {
+                chatTitle = centeredFileInput.files[0].name.replace(/\.[^/.]+$/, '');
+                if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
+            } else {
+                chatTitle = lang === 'ru' ? 'Бизнес-решение' : 'Business solution';
+            }
+
+            try {
+                const res = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: chatTitle })
+                });
+                const chat = await res.json();
+                currentChatId = chat.id;
+                if (titleEl) titleEl.innerText = chat.title;
+                if (chatWindow) chatWindow.innerHTML = '';
+                await loadChats();
+            } catch (e) {
+                const message = lang === 'ru' ? '❌ Не удалось создать проект' : '❌ Failed to create project';
+                showToast(message);
+                console.error(e);
+                return;
+            }
+        }
+
+        switchToChatMode(true);
+
+        const mainInput = document.getElementById('user-input');
+        if (mainInput && comment) {
+            mainInput.value = comment;
+            mainInput.style.height = 'auto';
+        }
+
+        if (hasFile && centeredFileInput.files[0]) {
+            const file = centeredFileInput.files[0];
+            const mainFileInput = document.getElementById('file-input');
+            if (mainFileInput) {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                mainFileInput.files = dataTransfer.files;
+                handleFileSelection(file);
+            }
+        }
+
+        input.value = '';
+        input.style.height = 'auto';
+        if (centeredFileInput) centeredFileInput.value = '';
+
+        await generateBusinessSolution();
+    };
 })();
