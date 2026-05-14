@@ -112,7 +112,10 @@
         </div>
         <!-- Правая часть шапки -->
         <div class="flex items-center gap-4">
-            <div id="loader" class="hidden dot-pulse"></div>
+            <!-- Кнопка настроек -->
+            <button id="settings-gear-btn" class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-gray-400 transition-all" title="Настройки">
+                <span class="material-symbols-outlined">settings</span>
+            </button>
             <!-- Кнопка показа панели результатов -->
             <button id="show-validation-btn" onclick="showValidationPanel()" class="hidden w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-white/5 text-primary transition-all" title="Показать результаты проверки">
                 <span class="material-symbols-outlined">verified</span>
@@ -205,6 +208,138 @@
         <div class="flex justify-end gap-3 mt-6">
             <button onclick="closeNewChatModal()" class="px-4 py-2 border border-outline-variant rounded-lg hover:bg-white/5">Отмена</button>
             <button onclick="confirmCreateChat()" class="px-4 py-2 bg-primary rounded-lg hover:bg-primary/80">Создать</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== МОДАЛЬНЫЕ ОКНА ========== -->
+
+<!-- Модальное окно настроек -->
+<div id="settings-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
+    <div class="bg-white dark:bg-surface-container-high rounded-2xl border border-gray-200 dark:border-outline-variant p-6 w-full max-w-2xl shadow-2xl">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white">Настройки</h2>
+            <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-all">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <!-- Боковое меню -->
+        <div class="flex gap-4">
+            <div class="w-40 flex-shrink-0 space-y-1">
+                <button onclick="switchSettingsTab('general')" id="tab-general" class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all bg-primary/10 text-primary">
+                    <span class="material-symbols-outlined text-sm align-middle mr-2">settings</span>
+                    Общие
+                </button>
+                <button onclick="switchSettingsTab('performance')" id="tab-performance" class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-all">
+                    <span class="material-symbols-outlined text-sm align-middle mr-2">speed</span>
+                    Производительность
+                </button>
+                <button onclick="switchSettingsTab('about')" id="tab-about" class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-all">
+                    <span class="material-symbols-outlined text-sm align-middle mr-2">info</span>
+                    О программе
+                </button>
+            </div>
+
+            <!-- Контент -->
+            <div class="flex-1">
+                <!-- Общие -->
+                <div id="tab-general-content" class="space-y-4">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-lg">
+                        <div>
+                            <label class="text-sm font-medium text-gray-900 dark:text-white">Тёмная тема</label>
+                            <p class="text-xs text-gray-500">Включить тёмную тему интерфейса</p>
+                        </div>
+                        <button id="theme-toggle-settings" class="w-12 h-6 rounded-full bg-gray-300 dark:bg-primary relative transition-all">
+                            <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform dark:translate-x-6"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Производительность -->
+                <div id="tab-performance-content" class="space-y-4 hidden">
+                    <div class="p-3 bg-gray-50 dark:bg-white/5 rounded-lg">
+                        <label class="text-sm font-medium text-gray-900 dark:text-white block mb-1">Потоки CPU (num_thread)</label>
+                        <div class="flex items-center gap-2">
+                            <input type="range" id="num_thread_slider" min="1" max="16" value="8" step="1" class="flex-1 h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                            <input type="number" id="num_thread_value" value="8" min="1" max="16" class="w-16 bg-white dark:bg-black/20 border border-gray-300 dark:border-outline-variant rounded-lg px-2 py-1 text-sm text-center">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Рекомендуется: 8-10 для 6-ядерного CPU</p>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-white/5 rounded-lg">
+                        <label class="text-sm font-medium text-gray-900 dark:text-white block mb-1">Температура (креативность)</label>
+                        <div class="flex items-center gap-2">
+                            <input type="range" id="temperature_slider" min="0" max="1" step="0.05" value="0.35" class="flex-1 h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                            <input type="number" id="temperature_value" value="0.35" min="0" max="1" step="0.05" class="w-16 bg-white dark:bg-black/20 border border-gray-300 dark:border-outline-variant rounded-lg px-2 py-1 text-sm text-center">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">0.3-0.4 — архитектурные задачи, 0.6-0.8 — креативные идеи</p>
+                    </div>
+                    <button onclick="applyPerformanceSettings()" class="w-full py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/80 transition-all">
+                        Сохранить настройки
+                    </button>
+                </div>
+
+                <!-- О программе -->
+                <div id="tab-about-content" class="space-y-4 hidden">
+                    <div class="text-center p-4">
+                        <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                            <span class="material-symbols-outlined text-primary text-4xl">architecture</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">ArchAssistant</h3>
+                        <p class="text-sm text-gray-500">Помощник ИТ-архитектора</p>
+                        <p class="text-xs text-gray-400 mt-1">Версия 1.0.0</p>
+                    </div>
+                    <div class="border-t border-gray-200 dark:border-outline-variant pt-3 space-y-1">
+                        <button onclick="showTerms()" class="w-full text-left text-sm text-gray-700 dark:text-gray-300 hover:text-primary py-2 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5">📜 Условия использования</button>
+                        <button onclick="showPrivacy()" class="w-full text-left text-sm text-gray-700 dark:text-gray-300 hover:text-primary py-2 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5">🔒 Политика конфиденциальности</button>
+                        <button onclick="showLicenses()" class="w-full text-left text-sm text-gray-700 dark:text-gray-300 hover:text-primary py-2 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5">📄 Лицензии</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-outline-variant">
+            <button onclick="closeSettingsModal()" class="px-4 py-2 border border-gray-300 dark:border-outline-variant rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для условий использования -->
+<div id="terms-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+    <div class="bg-white dark:bg-surface-container-high rounded-2xl border border-gray-200 dark:border-outline-variant p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white">Условия использования</h2>
+            <button onclick="closeTermsModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <div class="text-sm text-gray-700 dark:text-gray-300 space-y-3">
+            <p>1. Настоящий сервис предоставляется "как есть" без каких-либо гарантий.</p>
+            <p>2. Ответы, генерируемые AI, носят рекомендательный характер и не являются официальными архитектурными решениями.</p>
+            <p>3. Пользователь несёт ответственность за проверку и валидацию всех архитектурных решений.</p>
+            <p>4. Запрещено использовать сервис для незаконных целей.</p>
+            <p>5. Мы оставляем за собой право изменять условия использования без предварительного уведомления.</p>
+        </div>
+        <div class="mt-4 flex justify-end">
+            <button onclick="closeTermsModal()" class="px-4 py-2 bg-primary text-white rounded-lg">Понятно</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для политики конфиденциальности -->
+<div id="privacy-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+    <div class="bg-white dark:bg-surface-container-high rounded-2xl border border-gray-200 dark:border-outline-variant p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white">Политика конфиденциальности</h2>
+            <button onclick="closePrivacyModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <div class="text-sm text-gray-700 dark:text-gray-300 space-y-3">
+            <p>1. Мы не собираем и не храним ваши персональные данные.</p>
+            <p>2. История чатов хранится локально в базе данных на вашем сервере.</p>
+            <p>3. Загруженные файлы обрабатываются локально и не передаются третьим лицам.</p>
+            <p>4. Все запросы к AI обрабатываются локально через Ollama.</p>
+            <p>5. Мы не используем ваши данные для обучения моделей.</p>
+        </div>
+        <div class="mt-4 flex justify-end">
+            <button onclick="closePrivacyModal()" class="px-4 py-2 bg-primary text-white rounded-lg">Понятно</button>
         </div>
     </div>
 </div>
