@@ -1,0 +1,60 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-documents-table
+      author: archassistant
+      changes:
+        - createTable:
+            tableName: documents
+            remarks: "Таблица документов"
+            columns:
+              - column:
+                  name: document_id
+                  type: UUID
+                  remarks: "Идентификатор документа"
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: file_name
+                  type: VARCHAR(255)
+                  remarks: "Имя файла"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: file_path
+                  type: VARCHAR(255)
+                  remarks: "Путь к файлу"
+              - column:
+                  name: file_hash
+                  type: VARCHAR(255)
+                  remarks: "Хеш файла"
+              - column:
+                  name: file_size
+                  type: BIGINT
+                  remarks: "Размер файла в байтах"
+              - column:
+                  name: mime_type
+                  type: VARCHAR(255)
+                  remarks: "MIME тип"
+              - column:
+                  name: document_type
+                  type: VARCHAR(50)
+                  remarks: "Тип документа (PDF, DOCX, TXT, etc.)"
+              - column:
+                  name: extracted_text
+                  type: TEXT
+                  remarks: "Извлечённый текст"
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: "Дата создания"
+              - column:
+                  name: chat_id
+                  type: UUID
+                  remarks: "Ссылка на чат"
+        - addForeignKeyConstraint:
+            constraintName: fk_document_chat
+            baseTableName: documents
+            baseColumnNames: chat_id
+            referencedTableName: chats
+            referencedColumnNames: chat_id

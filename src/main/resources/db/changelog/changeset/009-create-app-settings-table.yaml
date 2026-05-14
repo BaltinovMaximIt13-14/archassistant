@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-create-app-settings-table
+      author: archassistant
+      changes:
+        - createTable:
+            tableName: app_settings
+            ifNotExists: true
+            columns:
+              - column:
+                  name: setting_key
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: setting_value
+                  type: TEXT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            indexName: idx_app_settings_key
+            tableName: app_settings
+            columns:
+              - column:
+                  name: setting_key
+            unique: true
+            ifNotExists: true

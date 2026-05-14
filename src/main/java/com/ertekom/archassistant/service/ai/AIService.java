@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
-public class SimpleAIService {
+public class AIService {
 
     OllamaChatModel chatModel;
     KnowledgeSearchService searchService;

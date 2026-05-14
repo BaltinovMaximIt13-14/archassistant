@@ -1,0 +1,30 @@
+databaseChangeLog:
+  # Таблицы чатов и сообщений
+  - include:
+      file: db/changelog/changeset/001-create-chats-table.yaml
+  - include:
+      file: db/changelog/changeset/002-create-messages-table.yaml
+
+  # Таблицы документов
+  - include:
+      file: db/changelog/changeset/003-create-documents-table.yaml
+  - include:
+      file: db/changelog/changeset/004-create-document-chunks-table.yaml
+
+  # Таблицы базы знаний
+  - include:
+      file: db/changelog/changeset/005-create-knowledge-sources-table.yaml
+  - include:
+      file: db/changelog/changeset/006-create-knowledge-files-table.yaml
+  - include:
+      file: db/changelog/changeset/007-create-knowledge-contents-table.yaml
+
+  # Индексы для оптимизации
+  - include:
+      file: db/changelog/changeset/008-create-indexes.yaml
+
+  # Таблицы настроек
+  - include:
+      file: db/changelog/changeset/009-create-app-settings-table.yaml
+  - include:
+      file: db/changelog/changeset/010-insert-default-settings.yaml

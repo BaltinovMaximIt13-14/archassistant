@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 010-insert-default-settings
+      author: archassistant
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO app_settings (setting_key, setting_value) 
+              VALUES ('num_thread', '8') 
+              ON CONFLICT (setting_key) DO NOTHING;
+              
+              INSERT INTO app_settings (setting_key, setting_value) 
+              VALUES ('temperature', '0.3') 
+              ON CONFLICT (setting_key) DO NOTHING;
