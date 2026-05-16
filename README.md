@@ -152,23 +152,39 @@ docker exec ollama ollama pull nomic-embed-text
 
 #### 3.3. Настройка приложения
 
-Создайте файл `application-local.properties`:
+Создайте файл `application-local.yml`:
 
-```properties
-# PostgreSQL
-spring.datasource.url=jdbc:postgresql://localhost:5432/archassistant
-spring.datasource.username=postgres
-spring.datasource.password=postgres
+```yml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/archassistant
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: qwen3:1.7b
+          temperature: 0.3
+          num-predict: 500
+      embedding:
+        model: nomic-embed-text
 
-# Ollama
-spring.ai.ollama.base-url=http://localhost:11434
-spring.ai.ollama.chat.options.model=qwen3:1.7b
-spring.ai.ollama.chat.options.temperature=0.3
-spring.ai.ollama.chat.options.num-predict=500
-spring.ai.ollama.embedding.model=nomic-embed-text
-
-# Логирование
-logging.level.com.ertekom.archassistant=DEBUG
+logging:
+  level:
+    com.ertekom.archassistant: DEBUG
 ```
 
 #### 3.4. Сборка приложения
