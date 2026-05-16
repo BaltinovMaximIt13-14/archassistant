@@ -224,36 +224,56 @@ docker exec archassistant-ollama ollama rm qwen3:1.7b
 
 ### 5. Конфигурация приложения
 
-#### 5.1. Основные настройки в `application.properties`:
+#### 5.1. Основные настройки в `application.yml`:
 
-```properties
-# Сервер
-server.port=8080
-
-# База данных
-spring.datasource.url=jdbc:postgresql://localhost:5432/archassistant
-spring.datasource.username=postgres
-spring.datasource.password=postgres
-
-# JPA
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-
-# Ollama
-spring.ai.ollama.base-url=http://localhost:11434
-spring.ai.ollama.chat.options.model=qwen3:1.7b
-spring.ai.ollama.chat.options.temperature=0.3
-spring.ai.ollama.chat.options.num-predict=500
-spring.ai.ollama.embedding.model=nomic-embed-text
-
-# Векторное хранилище
-spring.ai.vectorstore.pgvector.index-type=HNSW
-spring.ai.vectorstore.pgvector.distance-type=COSINE_DISTANCE
-spring.ai.vectorstore.pgvector.dimensions=768
+```yml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/archassistant
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: qwen3:1.7b
+          temperature: 0.3
+          num-predict: 500
+      embedding:
+        model: nomic-embed-text
+    
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 768
+        schema: public
+        table-name: vector_store
+        initialize-schema: true
 
 # GitLab синхронизация
-gitlab.sync.batch-size=100
-gitlab.sync.max-file-size=10MB
+gitlab:
+  sync:
+    batch-size: 100
+    max-file-size: 10MB
+
+# Логирование
+logging:
+  level:
+    com.ertekom.archassistant: DEBUG
+    org.springframework.ai: DEBUG
 ```
 
 #### 5.2. Настройки через переменные окружения:
@@ -284,7 +304,7 @@ archassistant/
 ├── src/main/resources/
 │   ├── static/              # HTML, CSS, JS
 │   ├── db/changelog/        # Liquibase миграции
-│   └── application.properties
+│   └── application.yml
 ├── docker-compose.yml
 ├── Dockerfile
 └── build.gradle
