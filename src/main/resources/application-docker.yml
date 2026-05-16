@@ -2,9 +2,9 @@ spring:
   main:
     allow-bean-definition-overriding: true
   datasource:
-    url: jdbc:postgresql://localhost:5438/archassistant
-    username: postgres
-    password: 233122
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -16,13 +16,14 @@ spring:
         format_sql: true
   ai:
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_URL}
       chat:
-        model: Qwen3:1.7b
         options:
-          temperature: 0.3
+          model: ${OLLAMA_MODEL}
+          temperature: ${OLLAMA_TEMPERATURE}
+          num-predict: ${OLLAMA_NUM_PREDICT}
       embedding:
-        model: nomic-embed-text
+        model: ${EMBEDDING_MODEL}
     vectorstore:
       pgvector:
         index-type: HNSW
@@ -38,4 +39,4 @@ learning:
 
 logging:
   level:
-    com.ertekom: DEBUG
+    com.ertekom: ${LOG_LEVEL}

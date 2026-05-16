@@ -3,26 +3,103 @@ version: '3.8'
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: my_pgvector_db
+    container_name: archassistant-postgres
     environment:
-      POSTGRES_DB: db
+      POSTGRES_DB: archassistant
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 233122
-
-    ports:
-      - "5438:5432"
+      POSTGRES_PASSWORD: postgres
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d archassistant"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
+    networks:
+      - archassistant-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: archassistant-ollama
+    expose:
+      - "11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - archassistant-network
+    command: serve
+
+  model-puller:
+    image: ollama/ollama:latest
+    container_name: archassistant-model-puller
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: /bin/sh
+    command: >
+      -c "
+        echo 'Waiting for Ollama...' &&
+        sleep 10 &&
+        echo 'Pulling qwen3:1.7b model...' &&
+        ollama pull qwen3:1.7b &&
+        echo 'Pulling nomic-embed-text model...' &&
+        ollama pull nomic-embed-text &&
+        echo 'Done!' &&
+        exit 0
+      "
+    restart: "no"
+    networks:
+      - archassistant-network
 
   app:
     build: .
-    container_name: arc_demo
+    container_name: archassistant-app
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
+      model-puller:
+        condition: service_completed_successfully
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_URL: jdbc:postgresql://postgres:5432/archassistant
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen3:1.7b
+      OLLAMA_TEMPERATURE: 0.3
+      OLLAMA_NUM_PREDICT: 500
+      EMBEDDING_MODEL: nomic-embed-text
+      LOG_LEVEL: DEBUG
+    restart: unless-stopped
+    networks:
+      - archassistant-network
+
+networks:
+  archassistant-network:
+    driver: bridge
 
 volumes:
   postgres_data:
+    name: archassistant_postgres_data
+  ollama_data:
+    name: archassistant_ollama_data
