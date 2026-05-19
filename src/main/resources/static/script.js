@@ -1339,9 +1339,12 @@
                         <span class="truncate text-sm" title="${source.repositoryUrl}">${escapeHtml(displayName)}</span>
                     </div>
                     <div class="flex items-center gap-1">
-                        <button onclick="event.stopPropagation(); window.syncKnowledgeSource('${source.id}')" class="p-1 hover:bg-primary/20 rounded" title="Синхронизировать">
-                            <span class="material-symbols-outlined text-sm">sync</span>
-                        </button>
+                 
+                        <button onclick="event.stopPropagation(); window.syncKnowledgeSource('${source.id}')" 
+        class="p-1 hover:bg-primary/20 rounded transition-all" 
+        title="Синхронизировать вручную (загрузить содержимое репозитория)">
+    <span class="material-symbols-outlined text-sm">sync</span>
+</button>
                         <button onclick="event.stopPropagation(); window.deleteKnowledgeSource('${source.id}')" class="p-1 hover:bg-red-500/20 rounded text-red-400" title="Удалить">
                             <span class="material-symbols-outlined text-sm">delete</span>
                         </button>
@@ -1401,7 +1404,7 @@
             const res = await fetch('/api/knowledge-sources', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ repositoryUrl: url, branch })
+                body: JSON.stringify({ repositoryUrl: url, branch })  // localPath удалён
             });
             if (!res.ok) throw new Error('Ошибка создания источника');
             const data = await res.json();
@@ -1411,11 +1414,13 @@
             await loadKnowledgeSources();
 
             const lang = localStorage.getItem('language') || 'ru';
-            const successMessage = lang === 'ru' ? `Источник "${displayName}" добавлен.` : `Source "${displayName}" added.`;
-            showToast(successMessage);
+            const successMessage = lang === 'ru'
+                ? `✅ Источник "${displayName}" добавлен. Не забудьте синхронизировать его (кнопка 🔄)`
+                : `✅ Source "${displayName}" added. Don't forget to sync it (🔄 button)`;
+            showToast(successMessage, 5000);
         } catch (e) {
             const lang = localStorage.getItem('language') || 'ru';
-            const errorMessage = lang === 'ru' ? 'Не удалось добавить источник: ' + e.message : 'Failed to add source: ' + e.message;
+            const errorMessage = lang === 'ru' ? '❌ Не удалось добавить источник: ' + e.message : '❌ Failed to add source: ' + e.message;
             showToast(errorMessage);
             console.error(e);
         }
