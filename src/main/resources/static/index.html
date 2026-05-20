@@ -75,6 +75,20 @@
 <div id="source-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
     <div class="bg-white dark:bg-surface-container-high rounded-2xl border border-gray-200 dark:border-outline-variant p-6 w-full max-w-md shadow-2xl">
         <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-white">Добавить источник знаний</h2>
+
+        <!-- ПРЕДУПРЕЖДЕНИЕ О СИНХРОНИЗАЦИИ -->
+        <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div class="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <span class="material-symbols-outlined text-sm">info</span>
+                <span class="text-xs font-medium">О синхронизации</span>
+            </div>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                • После добавления источника нажмите кнопку <strong>«Синхронизировать»</strong> 🔄 рядом с ним, чтобы загрузить содержимое.<br>
+                • Автоматическая синхронизация всех источников происходит <strong>раз в месяц</strong> (1-го числа).<br>
+                • Вы всегда можете запустить синхронизацию вручную в любое время.
+            </p>
+        </div>
+
         <div class="space-y-4">
             <div>
                 <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">Название (для отображения)</label>
@@ -88,11 +102,8 @@
                 <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">Ветка</label>
                 <input type="text" id="source-branch" value="main" class="w-full border rounded-lg px-4 py-2 focus:ring-primary focus:outline-none bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-gray-300 dark:border-outline-variant">
             </div>
-            <div>
-                <label class="block text-sm mb-1 text-gray-600 dark:text-gray-400">Локальный путь (опционально)</label>
-                <input type="text" id="source-path" placeholder="/knowledge" class="w-full border rounded-lg px-4 py-2 focus:ring-primary focus:outline-none bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-gray-300 dark:border-outline-variant">
-            </div>
         </div>
+
         <div class="flex justify-end gap-3 mt-6">
             <button onclick="closeSourceModal()" class="px-4 py-2 border border-gray-300 dark:border-outline-variant rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 transition-all">Отмена</button>
             <button onclick="addKnowledgeSource()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 transition-all shadow-sm">Добавить</button>
@@ -374,10 +385,10 @@
                 <!-- О программе -->
                 <div id="tab-about-content" class="space-y-4 hidden">
                     <div class="text-center p-4">
-                        <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                            <span class="material-symbols-outlined text-primary text-4xl">architecture</span>
+                        <div class="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                            <img src="/logo.png" alt="ER-Telecom" class="w-16 h-16">
                         </div>
-                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">ArchAssistant</h3>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">ER-Assistant</h3>
                         <p class="text-sm text-gray-500">Помощник ИТ-архитектора</p>
                         <p class="text-xs text-gray-400 mt-1">Версия 1.0.0</p>
                     </div>
