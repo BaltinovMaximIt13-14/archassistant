@@ -13,40 +13,65 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class OllamaConfig {
 
-    @Value("${spring.ai.ollama.base-url:http://localhost:11434}")
-    private String baseUrl;
+  @Value("${spring.ai.ollama.base-url:http://localhost:11434}")
+  private String baseUrl;
 
-    @Value("${spring.ai.ollama.chat.model:llama3.2}")
-    private String chatModelName;
+  @Value("${spring.ai.ollama.chat.model:llama3.2}")
+  private String chatModelName;
 
-    @Value("${spring.ai.ollama.embedding.model:nomic-embed-text}")
-    private String embeddingModelName;
+  @Value("${spring.ai.ollama.embedding.model:nomic-embed-text}")
+  private String embeddingModelName;
 
-    @Bean
-    public OllamaApi ollamaApi() {
-        return new OllamaApi(baseUrl);
-    }
+  @Value("${spring.ai.ollama.chat.options.temperature:0.0}")
+  private Double temperature;
 
-    @Bean
-    public OllamaChatModel ollamaChatModel(OllamaApi ollamaApi) {
-        return OllamaChatModel.builder()
-                .ollamaApi(ollamaApi)
-                .defaultOptions(OllamaOptions.builder()
-                        .model(chatModelName)
-                        .temperature(0.3)
-                        .topK(50)
-                        .topP(0.9)
-                        .build())
-                .build();
-    }
+  @Value("${spring.ai.ollama.chat.options.top_k:10}")
+  private Integer topK;
 
-    @Bean
-    public EmbeddingModel embeddingModel(OllamaApi ollamaApi) {
-        return OllamaEmbeddingModel.builder()
-                .ollamaApi(ollamaApi)
-                .defaultOptions(OllamaOptions.builder()
-                        .model(embeddingModelName)
-                        .build())
-                .build();
-    }
+  @Value("${spring.ai.ollama.chat.options.top_p:0.1}")
+  private Double topP;
+
+  @Value("${spring.ai.ollama.chat.options.num_ctx:4096}")
+  private Integer numCtx;
+
+  @Value("${spring.ai.ollama.chat.options.num_predict:1536}")
+  private Integer numPredict;
+
+  @Value("${spring.ai.ollama.chat.options.num_thread:8}")
+  private Integer numThread;
+
+  @Value("${spring.ai.ollama.chat.options.seed:42}")
+  private Integer seed;
+
+  @Bean
+  public OllamaApi ollamaApi() {
+    return new OllamaApi(baseUrl);
+  }
+
+  @Bean
+  public OllamaChatModel ollamaChatModel(OllamaApi ollamaApi) {
+    return OllamaChatModel.builder()
+        .ollamaApi(ollamaApi)
+        .defaultOptions(OllamaOptions.builder()
+            .model(chatModelName)
+            .temperature(temperature)
+            .topK(topK)
+            .topP(topP)
+            .numCtx(numCtx)
+            .numPredict(numPredict)
+            .numThread(numThread)
+            .seed(seed)
+            .build())
+        .build();
+  }
+
+  @Bean
+  public EmbeddingModel embeddingModel(OllamaApi ollamaApi) {
+    return OllamaEmbeddingModel.builder()
+        .ollamaApi(ollamaApi)
+        .defaultOptions(OllamaOptions.builder()
+            .model(embeddingModelName)
+            .build())
+        .build();
+  }
 }

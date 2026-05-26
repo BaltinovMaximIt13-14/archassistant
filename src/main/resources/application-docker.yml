@@ -2,28 +2,37 @@ spring:
   main:
     allow-bean-definition-overriding: true
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: jdbc:postgresql://localhost:5555/archassistant
+    username: postgres
+    password: 123579
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/changelog-master.yaml
+    drop-first: false
   ai:
     ollama:
-      base-url: ${OLLAMA_URL}
+      base-url: http://localhost:11434
       chat:
+        model: Qwen3:1.7b
         options:
-          model: ${OLLAMA_MODEL}
-          temperature: ${OLLAMA_TEMPERATURE}
-          num-predict: ${OLLAMA_NUM_PREDICT}
+          temperature: 0.0
+          top_k: 10
+          top_p: 0.1
+          seed: 42
+          num_ctx: 4096
+          num_predict: 1536
+          num_thread: 10
       embedding:
-        model: ${EMBEDDING_MODEL}
+        model: nomic-embed-text
     vectorstore:
       pgvector:
         index-type: HNSW
@@ -34,9 +43,16 @@ spring:
         initialize-schema: true
 
 learning:
-  schedule: "0 * * * * ?"
+  schedule: "0 0 0 1 * ?"
   chunk-size: 1000
+
+ocr:
+  tesseract:
+    enabled: true
+    executable: "C:/Program Files/Tesseract-OCR/tesseract.exe"
+    language: rus+eng
+    timeout-seconds: 120
 
 logging:
   level:
-    com.ertekom: ${LOG_LEVEL}
+    com.ertekom: DEBUG

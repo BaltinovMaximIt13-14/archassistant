@@ -46,10 +46,50 @@ main {
     margin: 1.5rem 0 0.5rem 0;
 }
 
+.ai-content h1,
+.ai-content h2 {
+    font-family: 'Manrope', sans-serif;
+    color: #fff;
+    font-weight: 800;
+    margin: 1.75rem 0 0.75rem 0;
+    line-height: 1.2;
+}
+
+.ai-content h1 { font-size: 1.4rem; }
+.ai-content h2 { font-size: 1.15rem; }
+
 .ai-content ul {
     list-style-type: disc;
     padding-left: 1.5rem;
     margin-bottom: 1.25rem;
+}
+
+.ai-content ol {
+    list-style-type: decimal;
+    padding-left: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.ai-content table {
+    width: 100%;
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.875rem;
+}
+
+.ai-content th,
+.ai-content td {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.5rem 0.65rem;
+    text-align: left;
+    vertical-align: top;
+}
+
+.ai-content th {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .ai-content pre {
@@ -64,6 +104,22 @@ main {
     background: #1e1e1e;
     padding: 0.2rem 0.4rem;
     border-radius: 0.4rem;
+}
+
+#user-input,
+#user-input-centered,
+.message-content,
+.message-editing textarea {
+    tab-size: 4;
+}
+
+#user-input,
+#user-input-centered {
+    overflow-y: hidden;
+}
+
+.message-content:not(.ai-content) {
+    white-space: pre-wrap;
 }
 
 /* Скроллбары */
@@ -135,6 +191,11 @@ html:not(.dark) .footer-brand p { color: #9ca3af; }
 html:not(.dark) .ai-content { color: #374151; }
 html:not(.dark) .ai-content strong { color: #111827; }
 html:not(.dark) .ai-content h3 { color: #111827; }
+html:not(.dark) .ai-content h1,
+html:not(.dark) .ai-content h2 { color: #111827; }
+html:not(.dark) .ai-content th { color: #111827; background: #f3f4f6; }
+html:not(.dark) .ai-content th,
+html:not(.dark) .ai-content td { border-color: #e5e7eb; }
 html:not(.dark) .ai-content pre { background: #f1f5f9; border: 1px solid #e2e8f0; }
 html:not(.dark) .ai-content code { background: #e2e8f0; color: #000; }
 
@@ -294,6 +355,7 @@ main {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 .criteria-description {
@@ -301,6 +363,53 @@ main {
     color: #9ca3af;
     margin-bottom: 12px;
 }
+
+.validation-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 10px 0 12px;
+}
+
+.validation-meta-grid div {
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.validation-meta-grid span {
+    display: block;
+    margin-bottom: 2px;
+    color: #6b7280;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.validation-meta-grid strong {
+    display: block;
+    color: #d1d5db;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.severity-badge {
+    margin-left: auto;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.severity-critical { color: #fecaca; background: rgba(220, 38, 38, 0.22); }
+.severity-high { color: #fecaca; background: rgba(239, 68, 68, 0.18); }
+.severity-medium { color: #fde68a; background: rgba(245, 158, 11, 0.16); }
+.severity-low { color: #bfdbfe; background: rgba(59, 130, 246, 0.16); }
+.severity-info { color: #d1d5db; background: rgba(156, 163, 175, 0.14); }
 
 .recommendation {
     background: rgba(0, 84, 166, 0.1);
@@ -322,6 +431,15 @@ html:not(.dark) .criteria-card:hover {
 
 html:not(.dark) .criteria-description {
     color: #6b7280;
+}
+
+html:not(.dark) .validation-meta-grid div {
+    background: #f9fafb;
+    border-color: #e5e7eb;
+}
+
+html:not(.dark) .validation-meta-grid strong {
+    color: #1f2937;
 }
 
 html:not(.dark) .recommendation {
@@ -1125,6 +1243,19 @@ html:not(.dark) .bg-surface-container-high {
     color: #0054a6;
 }
 
+.message-version-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #d1d5db;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
 html.dark .message-action-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: #60a5fa;
@@ -1154,6 +1285,13 @@ html.dark .message-action-btn:hover {
     gap: 8px;
     margin-top: 8px;
     justify-content: flex-end;
+}
+
+.file-drag-over .input-box,
+.file-drag-over > .bg-surface-container-high {
+    outline: 2px dashed #0054a6;
+    outline-offset: 6px;
+    background: rgba(0, 84, 166, 0.12) !important;
 }
 /* Кнопка бизнес-решения */
 .bg-purple-600 {

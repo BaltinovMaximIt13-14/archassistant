@@ -1,6 +1,7 @@
 package com.ertekom.archassistant.domain.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -35,6 +36,13 @@ public class Message {
 
     @Column(columnDefinition = "TEXT")
     private String content;
+
+    @JsonProperty("version")
+    @Column(name = "message_version")
+    private Integer version = 1;
+
+    @Column(name = "edited")
+    private Boolean edited = false;
 
     @CreationTimestamp
     @Column(name = "created_at")

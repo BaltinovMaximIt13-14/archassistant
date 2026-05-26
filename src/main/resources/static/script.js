@@ -52,21 +52,76 @@
         };
     }
 
+    function hasDraggedFiles(e) {
+        const transfer = e.dataTransfer;
+        if (!transfer) return false;
+        if (transfer.items && transfer.items.length > 0) {
+            return Array.from(transfer.items).some(item => item.kind === 'file');
+        }
+        return transfer.files && transfer.files.length > 0;
+    }
+
+    function getFirstDraggedFile(e) {
+        if (!hasDraggedFiles(e)) return null;
+        return e.dataTransfer.files?.[0] || null;
+    }
+
+    function setInputFiles(input, file) {
+        if (!input || !file) return;
+        try {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            input.files = dataTransfer.files;
+        } catch (e) {
+            console.warn('Не удалось программно установить файл:', e);
+        }
+    }
+
     // ---------- DRAG & DROP ----------
     if (dropZone) {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            document.body.addEventListener(eventName, (e) => e.preventDefault());
+        let fileDragDepth = 0;
+
+        ['dragenter', 'dragover', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, (e) => {
+                if (!hasDraggedFiles(e)) return;
+                e.preventDefault();
+            });
         });
-        document.body.addEventListener('dragenter', () => dropZone.classList.remove('hidden'));
+
+        document.body.addEventListener('dragenter', (e) => {
+            if (!hasDraggedFiles(e)) return;
+            fileDragDepth += 1;
+            const chatMode = document.getElementById('chat-mode');
+            if (chatMode && !chatMode.classList.contains('hidden')) {
+                dropZone.classList.remove('hidden');
+            }
+        });
+        document.body.addEventListener('dragleave', (e) => {
+            if (!hasDraggedFiles(e)) return;
+            fileDragDepth = Math.max(0, fileDragDepth - 1);
+            if (fileDragDepth === 0) dropZone.classList.add('hidden');
+        });
+        document.body.addEventListener('drop', (e) => {
+            if (!hasDraggedFiles(e)) return;
+            fileDragDepth = 0;
+            dropZone.classList.add('hidden');
+        });
         dropZone.addEventListener('dragleave', () => dropZone.classList.add('hidden'));
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.add('hidden');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) handleFileSelection(files[0]);
+            const file = getFirstDraggedFile(e);
+            if (file) handleFileSelection(file);
         });
-        dropZone.addEventListener('dragover', () => dropZone.classList.remove('hidden'));
-        dropZone.addEventListener('click', () => fileInputDrop?.click());
+        dropZone.addEventListener('dragover', (e) => {
+            if (!hasDraggedFiles(e)) return;
+            e.preventDefault();
+            dropZone.classList.remove('hidden');
+        });
+        dropZone.addEventListener('click', (e) => {
+            if (e.target.closest('label') || e.target === fileInputDrop) return;
+            fileInputDrop?.click();
+        });
     }
     if (fileInputDrop) {
         fileInputDrop.addEventListener('change', (e) => {
@@ -74,9 +129,6 @@
         });
     }
 
-    if (attachBtn) {
-        attachBtn.addEventListener('click', () => fileInput?.click());
-    }
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) handleFileSelection(e.target.files[0]);
@@ -234,7 +286,7 @@
 
                 // Загружаем сообщения
                 messages.forEach(msg => {
-                    appendMessage(msg.role, msg.content);
+                    appendMessage(msg.role, msg.content, msg.id, msg.version, msg.edited);
                     if (msg.role === 'assistant' && looksLikeValidationReport(msg.content)) {
                         lastValidationReport = msg.content;
                     }
@@ -288,7 +340,7 @@
         container.innerHTML = marked.parse(normalizeAssistantMarkdown(content));
     }
 
-    function appendMessage(role, content, messageId = null) {
+    function appendMessage(role, content, messageId = null, version = 1, edited = false) {
         if (!chatWindow) return null;
         const wrapper = document.createElement('div');
         const isAI = role === 'assistant';
@@ -329,11 +381,15 @@
     `;
 
         const aiName = isAI ? '<span class="text-primary font-bold text-[10px] uppercase tracking-widest">ArchAssistant</span>' : '';
+        const versionBadge = !isAI && (edited || Number(version) > 1)
+            ? `<span class="message-version-badge" title="Версия сообщения">v${Number(version) || 1}</span>`
+            : '';
 
         wrapper.innerHTML = `
         <div class="max-w-[85%] min-w-0">
             <div class="flex items-center gap-2 mb-1 ${isAI ? '' : 'justify-end'}">
                 ${aiName}
+                ${versionBadge}
                 <span class="text-[10px] text-gray-500 cursor-help" title="${fullDateTime}">${timeString}</span>
             </div>
             <div class="message-content ${isAI ? 'ai-content' : 'bg-primary p-4 rounded-2xl text-sm text-white border border-white/10 shadow-lg'}">
@@ -409,15 +465,19 @@
     const EMPTY_VALIDATION_HTML = '<p class="text-gray-500 text-sm text-center py-4">Нет данных проверки</p>';
 
     const SECTION_ALIASES = {
-        summary: ['итог', 'сводка', 'результат проверки', 'общий результат', 'общая оценка', 'вердикт'],
-        violations: ['нарушения', 'нарушение', 'несоответствия', 'несоответствие', 'проблемы', 'замечания', 'риски', 'ошибки'],
-        recommendations: ['рекомендации', 'рекомендация', 'что исправить', 'план исправлений', 'меры'],
-        passed: ['пройдено', 'пройденные проверки', 'пройденные тесты', 'успешные проверки', 'позитив', 'положительные моменты', 'соответствует', 'выполнено'],
-        maturity: ['оценка зрелости', 'уровень зрелости', 'зрелость', 'оценка']
+        summary: ['итог', 'сводка', 'результат проверки', 'общий результат', 'общая оценка', 'вердикт', 'summary', 'compliance summary', 'standard compliance summary', 'conclusion'],
+        violations: ['нарушения', 'нарушение', 'несоответствия', 'несоответствие', 'проблемы', 'замечания', 'риски', 'ошибки', 'violations', 'violation', 'issues', 'issue', 'standard compliance check', 'security violations', 'technical compliance issues', 'compliance issues'],
+        recommendations: ['рекомендации', 'рекомендация', 'что исправить', 'план исправлений', 'меры', 'recommendations', 'recommendation', 'remediation', 'fixes', 'actions'],
+        passed: ['пройдено', 'пройденные проверки', 'пройденные тесты', 'успешные проверки', 'позитив', 'положительные моменты', 'соответствует', 'выполнено', 'passed', 'passed checks', 'successful checks', 'compliant checks', 'strengths'],
+        maturity: ['оценка зрелости', 'уровень зрелости', 'зрелость', 'оценка', 'maturity', 'maturity score', 'score']
     };
 
-    const NO_VIOLATIONS_RE = /(нарушени[йя]\s+(?:не\s+)?(?:обнаружено|найдено|выявлено)|нет\s+нарушений|нарушения\s+отсутствуют|несоответствия\s+не\s+выявлены)/i;
-    const NO_PASSED_RE = /(пройденн(?:ые|ых)\s+(?:проверки|тесты)\s+(?:не\s+)?(?:выделены|найдены|обнаружены)|нет\s+пройденных|позитивные\s+моменты\s+не\s+выделены)/i;
+    const NO_VIOLATIONS_RE = /(нарушени[йя]\s+(?:не\s+)?(?:обнаружено|найдено|выявлено)|нет\s+нарушений|нарушения\s+отсутствуют|несоответствия\s+не\s+выявлены|no\s+(?:violations|issues|non-compliance|noncompliance)\s+(?:found|detected|identified)|violations?\s+(?:not\s+)?(?:found|detected|identified))/i;
+    const NO_PASSED_RE = /(пройденн(?:ые|ых)\s+(?:проверки|тесты)\s+(?:не\s+)?(?:выделены|найдены|обнаружены)|нет\s+пройденных|позитивные\s+моменты\s+не\s+выделены|no\s+passed\s+checks|passed\s+checks\s+(?:not\s+)?(?:found|detected|identified))/i;
+    const VALIDATION_ITEM_CODE_RE = /^((?:OA|TG|AR|SID|SEC|DATA|INFRA|DEVOPS|INT|API|П|P|Н|N|T|TEST|STD|REQ|CR)(?:[-\s]?\d+)?)\s*[:.)-]\s*(.*)$/i;
+    const VALIDATION_CODE_BASE_RE = /^(OA|TG|AR|SID|SEC|DATA|INFRA|DEVOPS|INT|API|П|P|Н|N|T|TEST|STD|REQ|CR)/i;
+    const SEVERITY_RE = /\b(CRITICAL|HIGH|MEDIUM|LOW|INFO)\b/i;
+    const TRAILING_SEVERITY_RE = /\s*(?:[—-]\s*)?(?:Severity\s*:\s*)?(CRITICAL|HIGH|MEDIUM|LOW|INFO)\s*$/i;
 
     function normalizeReportText(text) {
         return (text || '')
@@ -447,7 +507,7 @@
     }
 
     function isListItem(line) {
-        return /^\s*(?:[-*•]\s+|[✅❌⚠️]\s*|\d+[\).]\s+|\[[^\]]+\]\s*)/.test(line);
+        return /^\s*(?:[-*•]\s+|[✅❌⚠️]\s*|\d+(?:\.\d+)*[\).]?\s+|\[[^\]]+\]\s*)/.test(line);
     }
 
     function getSectionKey(title) {
@@ -468,15 +528,27 @@
     function parseSectionHeading(line) {
         const trimmed = line.trim();
         if (!trimmed) return null;
+        if (trimmed.includes('|')) return null;
 
         const withoutHeadingMarker = stripMarkdownSyntax(trimmed);
-        const numberedHeadingText = withoutHeadingMarker.replace(/^\d+[\).]\s*/, '');
+        const numberedHeading = stripNumberPrefix(withoutHeadingMarker);
+        const numberedHeadingText = numberedHeading.number ? numberedHeading.text : withoutHeadingMarker.replace(/^\d+[\).]\s*/, '');
         const inlineMatch = withoutHeadingMarker.match(/^(.{3,70}?):\s*(.*)$/);
+        if (inlineMatch && (
+            isDetailLabel(withoutHeadingMarker)
+            || isRecommendationLabel(withoutHeadingMarker)
+            || isFileLabel(withoutHeadingMarker)
+            || isPointLabel(withoutHeadingMarker)
+            || isSeverityLabel(withoutHeadingMarker)
+            || isEvidenceLabel(withoutHeadingMarker)
+        )) {
+            return null;
+        }
         const title = inlineMatch ? inlineMatch[1] : numberedHeadingText;
         const key = getSectionKey(title);
 
         if (!key) return null;
-        const isNumberedHeading = /^\d+[\).]\s+/.test(withoutHeadingMarker) && numberedHeadingText.length <= 70 && getSectionKey(numberedHeadingText);
+        const isNumberedHeading = Boolean(numberedHeading.number) && numberedHeadingText.length <= 70 && getSectionKey(numberedHeadingText);
         if (isListItem(trimmed) && !isNumberedHeading) return null;
 
         const looksLikeHeading = /^#{1,6}\s/.test(trimmed) || /\*\*.+\*\*/.test(trimmed) || inlineMatch || withoutHeadingMarker.length <= 70 || isNumberedHeading;
@@ -521,8 +593,55 @@
     }
 
     function stripNumberPrefix(line) {
-        const match = line.match(/^(\d+)[\).]\s*(.*)$/);
+        const match = line.match(/^(\d+(?:\.\d+)*)(?:[\).])?\s*(.*)$/);
         return match ? { number: match[1], text: match[2].trim() } : { number: null, text: line };
+    }
+
+    function normalizeValidationCode(code, type, fallbackNumber) {
+        const fallbackPrefix = type === 'violation' ? 'Н' : 'П';
+        if (!code) return `${fallbackPrefix}-${fallbackNumber}`;
+
+        const compact = code.replace(/\s+/g, '-').replace(/-+/g, '-').toUpperCase();
+        if (/^(OA|TG|AR|SID|SEC|DATA|INFRA|DEVOPS|INT|API)$/.test(compact)) {
+            return `${compact}-${fallbackNumber}`;
+        }
+        if (/^(П|P)$/.test(compact)) return `П-${fallbackNumber}`;
+        if (/^(Н|N)$/.test(compact)) return `Н-${fallbackNumber}`;
+        return compact;
+    }
+
+    function displayFallbackNumber(value) {
+        return String(value || '').replace(/\.+$/g, '') || '1';
+    }
+
+    function getCodeKeys(code) {
+        const normalized = (code || '').toUpperCase();
+        const base = normalized.match(VALIDATION_CODE_BASE_RE)?.[1]?.toUpperCase();
+        return [...new Set([normalized, base].filter(Boolean))];
+    }
+
+    function extractSeverity(text) {
+        return text.match(SEVERITY_RE)?.[1]?.toUpperCase() || '';
+    }
+
+    function stripTrailingSeverity(text) {
+        return text.replace(TRAILING_SEVERITY_RE, '').trim();
+    }
+
+    function isSeverityLabel(line) {
+        return /^severity\s*:/i.test(line);
+    }
+
+    function isFileLabel(line) {
+        return /^(файл|документ|source file|file)\s*:/i.test(line);
+    }
+
+    function isPointLabel(line) {
+        return /^(пункт документа|пункт|раздел|фрагмент|место|section)\s*:/i.test(line);
+    }
+
+    function isEvidenceLabel(line) {
+        return /^(обоснование|доказательство|подтверждение|факт|evidence|reason|rationale)\s*:/i.test(line);
     }
 
     function splitTitleAndDescription(text, defaultCategory) {
@@ -550,7 +669,7 @@
     }
 
     function isDetailLabel(line) {
-        return /^(описание|проблема|причина|критерий|стандарт|требование|влияние|риск|детали)\s*:/i.test(line);
+        return /^(описание|проблема|причина|критерий|стандарт|требование|влияние|риск|детали|issue|violation|problem|cause|criteria|standard|requirement|impact|risk|details|description)\s*:/i.test(line);
     }
 
     function extractDetailText(line) {
@@ -558,7 +677,7 @@
     }
 
     function isRecommendationLabel(line) {
-        return /^(рекомендац(?:ия|ии)|исправить|что сделать|решение|как исправить)\s*:/i.test(line);
+        return /^(рекомендац(?:ия|ии)|исправить|что сделать|решение|как исправить|recommendation|recommendations|remediation|fix|solution|how to fix|action)\s*:/i.test(line);
     }
 
     function buildValidationItem(rawLine, type, index, markerType) {
@@ -566,23 +685,29 @@
         const numbered = stripNumberPrefix(cleanLine);
         cleanLine = numbered.text;
 
-        const codeMatch = cleanLine.match(/^((?:Н|П|T|TEST|STD|REQ|CR)[-\s]?\d+)\s*[:.)-]?\s*(.*)$/i);
-        const code = codeMatch ? codeMatch[1].replace(/\s+/g, '-').toUpperCase() : null;
+        const severity = extractSeverity(cleanLine);
+        cleanLine = stripTrailingSeverity(cleanLine);
+
+        const codeMatch = cleanLine.match(VALIDATION_ITEM_CODE_RE);
+        const fallbackNumber = displayFallbackNumber(numbered.number || String(index + 1));
+        const code = codeMatch ? normalizeValidationCode(codeMatch[1], type, fallbackNumber) : null;
         if (codeMatch) cleanLine = codeMatch[2].trim() || codeMatch[1];
 
         const defaultCategory = type === 'violation' ? 'Нарушение стандарта' : 'Пройденная проверка';
         const split = splitTitleAndDescription(cleanLine, defaultCategory);
-        const fallbackNumber = numbered.number || String(index + 1);
         const criteria = split.category === defaultCategory && split.description.length <= 120
             ? split.description
             : split.category;
 
         return {
-            code: code || (type === 'violation' ? `Н-${fallbackNumber}` : `П-${fallbackNumber}`),
+            code: code || normalizeValidationCode(null, type, fallbackNumber),
             category: split.category || defaultCategory,
             criteria: criteria || defaultCategory,
             description: split.description || cleanLine || defaultCategory,
             recommendation: '',
+            severity,
+            file: '',
+            point: '',
             markerType
         };
     }
@@ -603,12 +728,12 @@
             if (cells.length < 2 || cells.every(cell => /^[-:]+$/.test(cell))) return;
 
             const rowText = cells.join(' ');
-            const isViolation = /❌|⚠️|наруш|не\s+соответ|fail|failed|ошибка|проблем/i.test(rowText);
-            const isPassed = /✅|пройден|соответствует|pass|passed|ok|выполн/i.test(rowText) && !isViolation;
+            const isViolation = /❌|⚠️|наруш|не\s+соответ|fail|failed|ошибка|проблем|violation|issue|non-?compliance|not\s+compliant|missing|required|prohibit/i.test(rowText);
+            const isPassed = /✅|пройден|соответствует|pass|passed|ok|выполн|compliant|aligned|implemented/i.test(rowText) && !isViolation;
 
             if ((type === 'violation' && !isViolation) || (type === 'passed' && !isPassed)) return;
 
-            const usefulCells = cells.filter(cell => !/^(статус|результат|✅|❌|⚠️|пройдено|нарушение)$/i.test(cell));
+            const usefulCells = cells.filter(cell => !/^(статус|результат|standard|violation|recommendation|status|result|✅|❌|⚠️|пройдено|нарушение)$/i.test(cell));
             const category = usefulCells[0] || (type === 'violation' ? 'Нарушение стандарта' : 'Пройденная проверка');
             const description = usefulCells.slice(1).join(' · ') || rowText;
 
@@ -617,11 +742,25 @@
                 category,
                 criteria: category,
                 description,
-                recommendation: ''
+                recommendation: '',
+                severity: extractSeverity(rowText),
+                file: '',
+                point: ''
             });
         });
 
         return items;
+    }
+
+    function looksLikeNewValidationItem(cleanLine, type) {
+        if (!cleanLine || isDetailLabel(cleanLine) || isRecommendationLabel(cleanLine) || isFileLabel(cleanLine) || isPointLabel(cleanLine) || isSeverityLabel(cleanLine)) {
+            return false;
+        }
+
+        if (VALIDATION_ITEM_CODE_RE.test(cleanLine)) return true;
+        if (type === 'violation' && extractSeverity(cleanLine)) return true;
+        if (type === 'passed' && /\b(PASSED|OK)\b|пройден|соответствует|выполнено/i.test(cleanLine)) return true;
+        return false;
     }
 
     function parseListItems(sectionText, type) {
@@ -634,6 +773,9 @@
             if (!current) return;
             current.description = stripMarkdownSyntax(current.description);
             current.recommendation = stripMarkdownSyntax(current.recommendation);
+            current.file = stripMarkdownSyntax(current.file) || 'Проверяемый документ';
+            current.point = stripMarkdownSyntax(current.point) || 'Не указан';
+            current.severity = stripMarkdownSyntax(current.severity).toUpperCase();
             if (current.description.length > 0) items.push(current);
             current = null;
         }
@@ -645,8 +787,28 @@
             const cleanLine = cleanItemText(trimmed);
             if (!cleanLine || NO_VIOLATIONS_RE.test(cleanLine) || NO_PASSED_RE.test(cleanLine)) return;
 
+            if (current && isFileLabel(cleanLine)) {
+                current.file = extractDetailText(cleanLine);
+                return;
+            }
+
+            if (current && isPointLabel(cleanLine)) {
+                current.point = extractDetailText(cleanLine);
+                return;
+            }
+
+            if (current && isSeverityLabel(cleanLine)) {
+                current.severity = extractSeverity(cleanLine);
+                return;
+            }
+
             if (current && isRecommendationLabel(cleanLine)) {
                 current.recommendation = [current.recommendation, extractDetailText(cleanLine)].filter(Boolean).join(' ');
+                return;
+            }
+
+            if (current && type === 'passed' && isEvidenceLabel(cleanLine)) {
+                appendItemDetail(current, extractDetailText(cleanLine));
                 return;
             }
 
@@ -655,8 +817,11 @@
                 return;
             }
 
-            const markerType = /^\s*\d+[\).]\s+/.test(trimmed) ? 'number' : (isListItem(trimmed) ? 'bullet' : 'plain');
-            const startsNewItem = markerType === 'number' || !current || (markerType === 'bullet' && current.markerType !== 'number');
+            const markerType = /^\s*\d+(?:\.\d+)*[\).]?\s+/.test(trimmed) ? 'number' : (isListItem(trimmed) ? 'bullet' : 'plain');
+            const startsNewItem = markerType === 'number'
+                || !current
+                || (markerType === 'bullet' && current.markerType !== 'number')
+                || (markerType === 'plain' && looksLikeNewValidationItem(cleanLine, type));
 
             if (startsNewItem) {
                 pushCurrent();
@@ -676,11 +841,21 @@
 
     function parseRecommendations(sectionText) {
         const recommendations = new Map();
+        const byCode = new Map();
         let common = '';
 
         normalizeReportText(sectionText).split('\n').forEach(line => {
             const cleaned = cleanItemText(line);
             if (!cleaned) return;
+            if (/^приоритет\s+\d+|^\d+\s*\([^)]*\)$/i.test(cleaned)) return;
+
+            const codeMatch = cleaned.match(VALIDATION_ITEM_CODE_RE);
+            if (codeMatch) {
+                const codeKeys = getCodeKeys(codeMatch[1]);
+                const text = stripTrailingSeverity(codeMatch[2] || cleaned);
+                codeKeys.forEach(key => byCode.set(key, text));
+                return;
+            }
 
             const numbered = stripNumberPrefix(cleaned);
             if (numbered.number) {
@@ -690,7 +865,7 @@
             }
         });
 
-        return { byNumber: recommendations, common };
+        return { byNumber: recommendations, byCode, common };
     }
 
     function applyRecommendations(violations, recommendationSection) {
@@ -705,8 +880,17 @@
                 return;
             }
 
-            const keywords = violation.category.toLowerCase().split(/\s+/).filter(word => word.length > 4);
-            for (const recommendation of recommendations.byNumber.values()) {
+            for (const key of getCodeKeys(violation.code)) {
+                if (recommendations.byCode.has(key)) {
+                    violation.recommendation = recommendations.byCode.get(key);
+                    return;
+                }
+            }
+
+            const keywordSource = `${violation.category} ${violation.criteria} ${violation.description}`.toLowerCase();
+            const keywords = keywordSource.split(/\s+/).filter(word => word.length > 4);
+            const recommendationValues = [...recommendations.byNumber.values(), ...recommendations.byCode.values()];
+            for (const recommendation of recommendationValues) {
                 const lower = recommendation.toLowerCase();
                 const matches = keywords.filter(keyword => lower.includes(keyword)).length;
                 if (matches >= 2) {
@@ -746,13 +930,24 @@
     function extractStatusLines(text, type) {
         const lines = normalizeReportText(text).split('\n');
         return lines.filter(line => {
-            if (type === 'violation') return /❌|⚠️|наруш|не\s+соответ|несоответ/i.test(line);
-            return /✅|пройден|соответствует|позитив|выполн/i.test(line) && !/не\s+соответ|наруш/i.test(line);
+            if (type === 'violation') return /❌|⚠️|наруш|не\s+соответ|несоответ|issue\s*:|violation\s*:|not\s+compliant|non-?compliance|missing|required|prohibit/i.test(line);
+            return /✅|пройден|соответствует|позитив|выполн|passed|compliant|aligned|implemented/i.test(line) && !/не\s+соответ|наруш|violation|issue|not\s+compliant|non-?compliance/i.test(line);
         }).join('\n');
     }
 
     function extractMaturity(text, sections) {
         const maturityText = [sections.maturity.join('\n'), text].filter(Boolean).join('\n');
+        const percentMaturity = maturityText.match(/(?:уровень|оценка)\s+зрелости[^0-9]{0,80}(\d{1,3})\s*(?:\/\s*100|%)/i)
+            || maturityText.match(/зрелость[^0-9]{0,80}(\d{1,3})\s*(?:\/\s*100|%)/i);
+        if (percentMaturity) {
+            const value = Math.min(100, Math.max(0, parseInt(percentMaturity[1], 10)));
+            return {
+                level: null,
+                display: `${value}/100`,
+                description: 'Уровень зрелости из отчёта'
+            };
+        }
+
         const patterns = [
             /(?:уровень|оценка)\s+зрелости[^0-9]{0,80}([1-5])\s*(?:\/|из)?\s*5?/i,
             /зрелость[^0-9]{0,80}([1-5])\s*(?:\/|из)?\s*5?/i,
@@ -771,7 +966,7 @@
             }
         }
 
-        return { level: null, description: 'Не указана в отчёте' };
+        return { level: null, display: null, description: 'Не указана в отчёте' };
     }
 
     function extractSummary(text, sections, violationsCount, passedCount) {
@@ -791,7 +986,7 @@
         const line = normalizeReportText(text)
             .split('\n')
             .map(stripMarkdownSyntax)
-            .find(item => item.length > 12 && !getSectionKey(item));
+            .find(item => item.length > 12 && !item.includes('|') && !getSectionKey(item));
         return line ? line.slice(0, 240) : '';
     }
 
@@ -804,6 +999,12 @@
     }
 
     function extractScore(text, violationsCount, passedCount) {
+        const machineSummaryScore = text.match(/"overallScore"\s*:\s*(\d{1,3})/i);
+        if (machineSummaryScore) return Math.min(100, Math.max(0, parseInt(machineSummaryScore[1], 10)));
+
+        const maturityScore = text.match(/(?:общий\s+)?уровень\s+зрелости[^0-9]{0,80}(\d{1,3})\s*\/\s*100/i);
+        if (maturityScore) return Math.min(100, Math.max(0, parseInt(maturityScore[1], 10)));
+
         const percentMatch = text.match(/(?:оценка|соответствие|готовность|score|итог)[^0-9%]{0,60}(\d{1,3})\s*%/i)
             || text.match(/(\d{1,3})\s*%\s*(?:соответств|готовност|успешн|пройден)/i);
 
@@ -819,10 +1020,12 @@
         if (!normalized) return false;
 
         const hasReportSection = [
-            'наруш', 'несоответ', 'пройден', 'позитив', 'рекомендац', 'оценка зрелости', 'уровень зрелости'
+            'наруш', 'несоответ', 'пройден', 'позитив', 'рекомендац', 'оценка зрелости', 'уровень зрелости',
+            'architecture compliance validation report', 'standard compliance', 'security violations',
+            'technical compliance issues', 'issue:', 'violation:', 'recommendation:', 'compliance summary'
         ].some(token => normalized.includes(token));
 
-        const hasValidationContext = /стандарт|провер|архитектур|соответств/.test(normalized);
+        const hasValidationContext = /стандарт|провер|архитектур|соответств|standard|compliance|architecture|validation/.test(normalized);
         return hasReportSection && hasValidationContext;
     }
 
@@ -847,10 +1050,11 @@
     }
 
     function updateValidationTabCounters(violationsCount, passedCount) {
+        const lang = localStorage.getItem('language') || 'ru';
         const labels = {
-            violations: ['Нарушения', violationsCount],
-            passed: ['Пройдено', passedCount],
-            summary: ['Сводка', null]
+            violations: [lang === 'en' ? 'Violations' : 'Нарушения', violationsCount],
+            passed: [lang === 'en' ? 'Passed' : 'Пройдено', passedCount],
+            summary: [lang === 'en' ? 'Summary' : 'Сводка', null]
         };
 
         Object.entries(labels).forEach(([key, [label, count]]) => {
@@ -896,20 +1100,28 @@
         card.className = 'criteria-card violation';
 
         const codeDisplay = violation.code ? `<span class="font-mono text-xs text-primary mr-2">[${violation.code}]</span>` : '';
+        const severity = violation.severity || 'INFO';
+        const severityClass = `severity-${severity.toLowerCase()}`;
+        const recommendation = violation.recommendation || 'См. полный отчёт для рекомендаций';
 
         card.innerHTML = `
             <div class="criteria-title">
                 <span class="material-symbols-outlined text-red-500">error</span>
                 ${codeDisplay}
                 <span>${escapeHtml(violation.criteria)}</span>
+                <span class="severity-badge ${severityClass}">${escapeHtml(severity)}</span>
             </div>
-            <div class="criteria-description">${escapeHtml(violation.description)}</div>
+            <div class="validation-meta-grid">
+                <div><span>Файл</span><strong>${escapeHtml(violation.file || 'Проверяемый документ')}</strong></div>
+                <div><span>Пункт</span><strong>${escapeHtml(violation.point || 'Не указан')}</strong></div>
+            </div>
+            <div class="criteria-description">${escapeHtmlMultiline(violation.description)}</div>
             <div class="recommendation">
                 <strong class="text-primary flex items-center gap-1">
                     <span class="material-symbols-outlined text-sm">lightbulb</span>
                     Рекомендация:
                 </strong>
-                <div class="mt-1">${escapeHtml(violation.recommendation)}</div>
+                <div class="mt-1">${escapeHtmlMultiline(recommendation)}</div>
             </div>
         `;
         return card;
@@ -921,9 +1133,13 @@
         card.innerHTML = `
             <div class="criteria-title">
                 <span class="material-symbols-outlined text-green-500">check_circle</span>
-                <span class="text-xs text-gray-500">${escapeHtml(item.category)}</span>
+                <span>${escapeHtml(item.criteria || item.category)}</span>
             </div>
-            <div class="criteria-description">${escapeHtml(item.description)}</div>
+            <div class="validation-meta-grid">
+                <div><span>Файл</span><strong>${escapeHtml(item.file || 'Проверяемый документ')}</strong></div>
+                <div><span>Пункт</span><strong>${escapeHtml(item.point || 'Не указан')}</strong></div>
+            </div>
+            <div class="criteria-description">${escapeHtmlMultiline(item.description)}</div>
         `;
         return card;
     }
@@ -931,7 +1147,7 @@
     function createSummaryHTML(report) {
         const { violations, passed, maturity, summary, conclusion, score } = report;
         const scoreClass = score >= 80 ? 'text-green-500' : score >= 50 ? 'text-yellow-500' : 'text-red-500';
-        const maturityValue = maturity.level ? `${maturity.level}/5` : '—';
+        const maturityValue = maturity.display || (maturity.level ? `${maturity.level}/5` : '—');
 
         return `
             <div class="space-y-4">
@@ -969,6 +1185,30 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function escapeHtmlMultiline(text) {
+        return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    function resizeTextareaToContent(textarea, maxHeight = 200) {
+        if (!textarea) return;
+        textarea.style.height = 'auto';
+        textarea.style.overflowY = 'hidden';
+        const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+        textarea.style.height = `${newHeight}px`;
+        textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }
+
+    function insertTabAtCursor(textarea, event) {
+        if (!textarea || event.key !== 'Tab') return false;
+        event.preventDefault();
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        textarea.value = `${textarea.value.substring(0, start)}\t${textarea.value.substring(end)}`;
+        textarea.selectionStart = textarea.selectionEnd = start + 1;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
     }
 
     // ---------- ПРОВЕРКА РЕШЕНИЯ ----------
@@ -1048,7 +1288,7 @@
 
         if (inputField) {
             inputField.value = '';
-            inputField.style.height = 'auto';
+            resizeTextareaToContent(inputField);
         }
 
         // Сохраняем сообщение в БД
@@ -1068,11 +1308,13 @@
         showValidationLoading();
 
         let url;
+        const shouldClearAttachment = Boolean(uploadedFile);
         if (uploadedDocumentId) {
             url = `/api/ai/validate/document/${uploadedDocumentId}?message=${encodeURIComponent(comment)}&chatId=${currentChatId}`;
         } else {
             url = `/api/ai/validate?solution=${encodeURIComponent(comment)}&chatId=${currentChatId}`;
         }
+        if (shouldClearAttachment) clearAttachedFile();
 
         currentEventSource = new EventSource(url);
 
@@ -1157,7 +1399,7 @@
 
         if (inputField) {
             inputField.value = '';
-            inputField.style.height = 'auto';
+            resizeTextareaToContent(inputField);
         }
 
         const aiContainer = appendMessage('assistant', '');
@@ -1219,7 +1461,7 @@
             const centeredInput = document.getElementById('user-input-centered');
             if (centeredInput) {
                 centeredInput.value = '';
-                centeredInput.style.height = 'auto';
+                resizeTextareaToContent(centeredInput);
                 centeredInput.placeholder = lang === 'ru' ? 'Задайте вопрос или опишите задачу...' : 'Ask a question or describe the task...';
                 centeredInput.focus();
             }
@@ -1239,7 +1481,7 @@
         // Очищаем обычное поле ввода на всякий случай
         if (inputField) {
             inputField.value = '';
-            inputField.style.height = 'auto';
+            resizeTextareaToContent(inputField);
         }
 
         // Показываем уведомление
@@ -1274,18 +1516,17 @@
     if (inputField) {
         // Авто-расширение textarea
         function autoResizeTextarea() {
-            inputField.style.height = 'auto';
-            const newHeight = Math.min(inputField.scrollHeight, 200); // максимум 200px
-            inputField.style.height = newHeight + 'px';
+            resizeTextareaToContent(inputField);
         }
 
         inputField.addEventListener('input', autoResizeTextarea);
 
         inputField.addEventListener('keydown', (e) => {
+            if (insertTabAtCursor(inputField, e)) return;
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 // Сбрасываем высоту перед отправкой
-                inputField.style.height = 'auto';
+                resizeTextareaToContent(inputField);
                 handleAction('/api/ai/stream', 'message');
             }
         });
@@ -1938,8 +2179,15 @@
                 'close': 'Закрыть',
                 'send': 'Отправить',
                 'check': 'Проверить',
+                'solution': 'Решение',
                 'attach': 'Прикрепить файл',
                 'placeholder': 'Введите описание задачи или прикрепите файл...',
+                'centered-placeholder': 'Задайте вопрос или опишите задачу...',
+                'drop-file': 'Перетащите файл сюда или выберите на компьютере',
+                'validation-results': 'Результаты проверки',
+                'violations-tab': 'Нарушения',
+                'passed-tab': 'Пройдено',
+                'summary-tab': 'Сводка',
                 'threads': 'Потоки CPU (num_thread)',
                 'threads-recommend': 'Рекомендуется: 8-10 для 6-ядерного CPU',
                 'temperature': 'Температура (креативность)',
@@ -1991,8 +2239,15 @@
                 'close': 'Close',
                 'send': 'Send',
                 'check': 'Check',
+                'solution': 'Solution',
                 'attach': 'Attach file',
                 'placeholder': 'Enter task description or attach a file...',
+                'centered-placeholder': 'Ask a question or describe the task...',
+                'drop-file': 'Drop a file here or choose from your computer',
+                'validation-results': 'Validation results',
+                'violations-tab': 'Violations',
+                'passed-tab': 'Passed',
+                'summary-tab': 'Summary',
                 'threads': 'CPU threads (num_thread)',
                 'threads-recommend': 'Recommended: 8-10 for 6-core CPU',
                 'temperature': 'Temperature (creativity)',
@@ -2157,20 +2412,52 @@
         if (licensesBtn) licensesBtn.innerHTML = `📄 ${t['licenses']}`;
 
         // Кнопки чата
-        const sendBtn = document.querySelector('button[onclick*="handleAction"]');
-        if (sendBtn) sendBtn.title = t['send'];
+        document.querySelectorAll('button[onclick*="handleAction"]').forEach(btn => {
+            btn.title = t['send'];
+        });
 
-        const validateBtn = document.querySelector('button[onclick="validateSolution()"]');
-        if (validateBtn) validateBtn.innerHTML = `<span class="material-symbols-outlined text-lg">verified</span> ${t['check']}`;
+        document.querySelectorAll('button[onclick="validateSolution()"], button[onclick="validateSolutionCentered()"]').forEach(btn => {
+            btn.innerHTML = `<span class="material-symbols-outlined text-lg">verified</span> ${t['check']}`;
+        });
+
+        document.querySelectorAll('button[onclick="generateBusinessSolution()"], button[onclick="generateBusinessSolutionCentered()"]').forEach(btn => {
+            btn.innerHTML = `<span class="material-symbols-outlined text-lg">business_center</span> ${t['solution']}`;
+        });
 
         const attachLabel = document.getElementById('attach-btn');
         if (attachLabel) attachLabel.title = t['attach'];
+        const centeredAttachLabel = document.getElementById('attach-btn-centered');
+        if (centeredAttachLabel) centeredAttachLabel.title = t['attach'];
 
         // Поле ввода
         const inputField = document.getElementById('user-input');
         if (inputField && !inputField.placeholder.includes('Файл')) {
             inputField.placeholder = t['placeholder'];
         }
+        const centeredInput = document.getElementById('user-input-centered');
+        if (centeredInput && !centeredInput.placeholder.includes('Файл')) {
+            centeredInput.placeholder = t['centered-placeholder'];
+        }
+
+        const validationTitle = document.querySelector('#validation-panel h3');
+        if (validationTitle) validationTitle.textContent = t['validation-results'];
+
+        const dropZoneText = document.querySelector('#drop-zone p');
+        if (dropZoneText) {
+            const label = dropZoneText.querySelector('label');
+            const chooseText = lang === 'en' ? 'choose from your computer' : 'выберите на компьютере';
+            if (dropZoneText.firstChild) {
+                dropZoneText.firstChild.textContent = lang === 'en' ? 'Drop a file here or ' : 'Перетащите файл сюда или ';
+            }
+            if (label && label.firstChild) label.firstChild.textContent = chooseText;
+        }
+
+        const tabViolations = document.getElementById('tab-violations');
+        if (tabViolations) tabViolations.firstChild.textContent = t['violations-tab'];
+        const tabPassed = document.getElementById('tab-passed');
+        if (tabPassed) tabPassed.firstChild.textContent = t['passed-tab'];
+        const tabSummary = document.getElementById('tab-summary');
+        if (tabSummary) tabSummary.textContent = t['summary-tab'];
 
         // Текст в модалках
         const termsTitle = document.querySelector('#terms-modal h2');
@@ -2706,11 +2993,6 @@
         const text = input?.value.trim();
 
         // Если есть файл, отправляем как проверку (потому что файл)
-        if (centeredUploadedFile) {
-            await validateSolutionCentered();
-            return;
-        }
-
         if (!text || isLoading) return;
 
         // Если нет активного чата, создаём новый
@@ -2745,12 +3027,13 @@
         const mainInput = document.getElementById('user-input');
         if (mainInput) {
             mainInput.value = text;
-            mainInput.style.height = 'auto';
+            resizeTextareaToContent(mainInput);
         }
 
         // Очищаем центрированное поле
         input.value = '';
-        input.style.height = 'auto';
+        resizeTextareaToContent(input);
+        clearCenteredAttachedFile();
 
         // Вызываем обычную отправку
         await handleAction('/api/ai/stream', 'message');
@@ -2816,7 +3099,7 @@
         const mainInput = document.getElementById('user-input');
         if (mainInput && comment) {
             mainInput.value = comment;
-            mainInput.style.height = 'auto';
+            resizeTextareaToContent(mainInput);
         }
 
         // Копируем файл из центрированного поля в обычное
@@ -2824,16 +3107,14 @@
             const file = centeredUploadedFile;
             const mainFileInput = document.getElementById('file-input');
             if (mainFileInput) {
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(file);
-                mainFileInput.files = dataTransfer.files;
+                setInputFiles(mainFileInput, file);
                 handleFileSelection(file);
             }
         }
 
         // Очищаем центрированное поле и файл
         input.value = '';
-        input.style.height = 'auto';
+        resizeTextareaToContent(input);
         clearCenteredAttachedFile();
 
         // Вызываем обычную проверку
@@ -2870,12 +3151,14 @@
     const centeredFileIndicator = document.getElementById('file-indicator-centered');
     const centeredFileNameSpan = document.getElementById('file-name-centered');
     const centeredClearFileBtn = document.getElementById('clear-file-centered');
+    const centeredInputContainer = document.getElementById('centered-input-container');
 
     // Переменная для хранения файла в центрированном режиме
     let centeredUploadedFile = null;
 
     function handleCenteredFileSelection(file) {
         centeredUploadedFile = file;
+        setInputFiles(centeredFileInput, file);
         if (centeredFileNameSpan) centeredFileNameSpan.textContent = file.name;
         if (centeredFileIndicator) centeredFileIndicator.classList.remove('hidden');
         if (centeredInput) centeredInput.placeholder = `Файл "${file.name}" прикреплён. Введите комментарий (необязательно)`;
@@ -2889,10 +3172,6 @@
         if (centeredInput) centeredInput.placeholder = 'Задайте вопрос или опишите задачу...';
     }
 
-    // Обработчики для центрированного режима
-    if (centeredAttachBtn) {
-        centeredAttachBtn.addEventListener('click', () => centeredFileInput?.click());
-    }
     if (centeredFileInput) {
         centeredFileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) handleCenteredFileSelection(e.target.files[0]);
@@ -2902,37 +3181,41 @@
         centeredClearFileBtn.addEventListener('click', clearCenteredAttachedFile);
     }
 
-    // Обработчики для центрированного режима
-    if (centeredAttachBtn) {
-        centeredAttachBtn.addEventListener('click', () => centeredFileInput?.click());
-    }
-    if (centeredFileInput) {
-        centeredFileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) handleCenteredFileSelection(e.target.files[0]);
+    if (centeredInputContainer) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+            centeredInputContainer.addEventListener(eventName, (e) => {
+                if (!hasDraggedFiles(e)) return;
+                e.preventDefault();
+                centeredInputContainer.classList.add('file-drag-over');
+            });
         });
-    }
-    if (centeredClearFileBtn) {
-        centeredClearFileBtn.addEventListener('click', clearCenteredAttachedFile);
+        ['dragleave', 'drop'].forEach(eventName => {
+            centeredInputContainer.addEventListener(eventName, (e) => {
+                if (!hasDraggedFiles(e)) return;
+                e.preventDefault();
+                centeredInputContainer.classList.remove('file-drag-over');
+            });
+        });
+        centeredInputContainer.addEventListener('drop', (e) => {
+            const file = getFirstDraggedFile(e);
+            if (file) handleCenteredFileSelection(file);
+        });
     }
 
     // ========== ОБРАБОТЧИК ENTER ДЛЯ ЦЕНТРИРОВАННОГО ПОЛЯ ==========
     if (centeredInput) {
         // Авто-расширение высоты
         centeredInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+            resizeTextareaToContent(this);
         });
 
         // Отправка по Enter
         centeredInput.addEventListener('keydown', (e) => {
+            if (insertTabAtCursor(centeredInput, e)) return;
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                centeredInput.style.height = 'auto';
-                if (centeredUploadedFile) {
-                    validateSolutionCentered();
-                } else {
-                    handleActionCentered();
-                }
+                resizeTextareaToContent(centeredInput);
+                handleActionCentered();
             }
         });
     }
@@ -2976,6 +3259,7 @@
             if (!res.ok) {
                 throw new Error('Ошибка обновления');
             }
+            const updatedMessage = await res.json();
 
             // Обновляем отображение сообщения
             const messageDiv = document.querySelector(`[data-message-id="${messageIdToUpdate}"]`);
@@ -2983,6 +3267,18 @@
                 const contentDiv = messageDiv.querySelector('.message-content');
                 contentDiv.innerHTML = escapeHtml(newText);
                 contentDiv.setAttribute('data-original-text', newText);
+                const metaRow = messageDiv.querySelector('.message-content')?.parentElement?.querySelector('.flex.items-center.gap-2.mb-1');
+                if (metaRow) {
+                    let versionBadge = metaRow.querySelector('.message-version-badge');
+                    if (!versionBadge) {
+                        versionBadge = document.createElement('span');
+                        versionBadge.className = 'message-version-badge';
+                        versionBadge.title = 'Версия сообщения';
+                        const timeEl = metaRow.querySelector('span.cursor-help');
+                        metaRow.insertBefore(versionBadge, timeEl || null);
+                    }
+                    versionBadge.textContent = `v${updatedMessage.version || 2}`;
+                }
             }
 
             const lang = localStorage.getItem('language') || 'ru';
@@ -3103,6 +3399,7 @@
         if (textarea) {
             textarea.focus();
             textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            textarea.addEventListener('keydown', (e) => insertTabAtCursor(textarea, e));
         }
     };
 
@@ -3198,7 +3495,7 @@
 
         if (inputField) {
             inputField.value = '';
-            inputField.style.height = 'auto';
+            resizeTextareaToContent(inputField);
         }
 
         try {
@@ -3216,11 +3513,13 @@
         let fullText = '';
 
         let url;
+        const shouldClearAttachment = Boolean(uploadedFile);
         if (uploadedDocumentId) {
             url = `/api/ai/business?input=${encodeURIComponent(comment)}&chatId=${currentChatId}&documentId=${uploadedDocumentId}`;
         } else {
             url = `/api/ai/business?input=${encodeURIComponent(comment)}&chatId=${currentChatId}`;
         }
+        if (shouldClearAttachment) clearAttachedFile();
 
         currentEventSource = new EventSource(url);
 
@@ -3258,8 +3557,7 @@
         const input = document.getElementById('user-input-centered');
         const comment = input?.value.trim() || '';
 
-        const centeredFileInput = document.getElementById('file-input-centered');
-        const hasFile = centeredFileInput && centeredFileInput.files.length > 0;
+        const hasFile = centeredUploadedFile !== null;
 
         if (!comment && !hasFile) {
             const lang = localStorage.getItem('language') || 'ru';
@@ -3275,8 +3573,8 @@
             if (comment) {
                 chatTitle = comment.slice(0, 50);
                 if (chatTitle.length === 50) chatTitle += '...';
-            } else if (hasFile && centeredFileInput.files[0]) {
-                chatTitle = centeredFileInput.files[0].name.replace(/\.[^/.]+$/, '');
+            } else if (hasFile && centeredUploadedFile) {
+                chatTitle = centeredUploadedFile.name.replace(/\.[^/.]+$/, '');
                 if (chatTitle.length > 50) chatTitle = chatTitle.slice(0, 50) + '...';
             } else {
                 chatTitle = lang === 'ru' ? 'Бизнес-решение' : 'Business solution';
@@ -3306,23 +3604,21 @@
         const mainInput = document.getElementById('user-input');
         if (mainInput && comment) {
             mainInput.value = comment;
-            mainInput.style.height = 'auto';
+            resizeTextareaToContent(mainInput);
         }
 
-        if (hasFile && centeredFileInput.files[0]) {
-            const file = centeredFileInput.files[0];
+        if (hasFile && centeredUploadedFile) {
+            const file = centeredUploadedFile;
             const mainFileInput = document.getElementById('file-input');
             if (mainFileInput) {
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(file);
-                mainFileInput.files = dataTransfer.files;
+                setInputFiles(mainFileInput, file);
                 handleFileSelection(file);
             }
         }
 
         input.value = '';
-        input.style.height = 'auto';
-        if (centeredFileInput) centeredFileInput.value = '';
+        resizeTextareaToContent(input);
+        clearCenteredAttachedFile();
 
         await generateBusinessSolution();
     };

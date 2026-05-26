@@ -1,6 +1,7 @@
 package com.ertekom.archassistant.web.controller;
 
 import com.ertekom.archassistant.domain.entity.Message;
+import com.ertekom.archassistant.domain.entity.MessageVersion;
 import com.ertekom.archassistant.service.MessageService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,11 @@ public class MessageController {
     public ResponseEntity<Message> updateMessage(@PathVariable UUID messageId, @RequestBody Map<String, String> request) {
         String content = request.get("content");
         return ResponseEntity.ok(messageService.updateMessage(messageId, content));
+    }
+
+    @GetMapping("/{messageId}/versions")
+    public ResponseEntity<List<MessageVersion>> getMessageVersions(@PathVariable UUID messageId) {
+        return ResponseEntity.ok(messageService.getMessageVersions(messageId));
     }
 
     // Удаление сообщения

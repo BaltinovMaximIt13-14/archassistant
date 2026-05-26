@@ -28,3 +28,5 @@ databaseChangeLog:
       file: db/changelog/changeset/009-create-app-settings-table.yaml
   - include:
       file: db/changelog/changeset/010-insert-default-settings.yaml
+  - include:
+      file: db/changelog/changeset/011-create-message-versions-table.yaml

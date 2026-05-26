@@ -1,0 +1,69 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-add-message-version-fields
+      author: archassistant
+      changes:
+        - addColumn:
+            tableName: messages
+            columns:
+              - column:
+                  name: message_version
+                  type: INT
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: edited
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 011-create-message-versions-table
+      author: archassistant
+      changes:
+        - createTable:
+            tableName: message_versions
+            remarks: "История редакций сообщений"
+            columns:
+              - column:
+                  name: version_id
+                  type: UUID
+                  remarks: "Идентификатор версии"
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: message_id
+                  type: UUID
+                  remarks: "Ссылка на сообщение"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version_number
+                  type: INT
+                  remarks: "Номер сохранённой версии"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content
+                  type: TEXT
+                  remarks: "Содержание версии"
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: "Дата сохранения версии"
+        - addForeignKeyConstraint:
+            constraintName: fk_message_version_message
+            baseTableName: message_versions
+            baseColumnNames: message_id
+            referencedTableName: messages
+            referencedColumnNames: message_id
+            onDelete: CASCADE
+        - createIndex:
+            indexName: idx_message_versions_message
+            tableName: message_versions
+            columns:
+              - column:
+                  name: message_id

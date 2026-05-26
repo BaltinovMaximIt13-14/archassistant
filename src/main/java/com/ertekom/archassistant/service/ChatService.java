@@ -6,6 +6,7 @@ import com.ertekom.archassistant.repository.ChatRepository;
 import com.ertekom.archassistant.repository.DocumentChunkRepository;
 import com.ertekom.archassistant.repository.DocumentRepository;
 import com.ertekom.archassistant.repository.MessageRepository;
+import com.ertekom.archassistant.repository.MessageVersionRepository;
 import com.ertekom.archassistant.repository.VectorStoreRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class ChatService {
     MessageRepository messageRepository;
     DocumentRepository documentRepository;
     DocumentChunkRepository documentChunkRepository;
+    MessageVersionRepository messageVersionRepository;
     VectorStoreRepository vectorStoreRepository;
 
     @Transactional
@@ -71,6 +73,7 @@ public class ChatService {
         vectorStoreRepository.deleteByChatId(id);
         documentChunkRepository.deleteByChat_Id(id);
         documentRepository.deleteByChat_Id(id);
+        messageVersionRepository.deleteByMessage_Chat_Id(id);
         messageRepository.deleteByChat_Id(id);
         chatRepository.deleteById(id);
     }
