@@ -23,8 +23,9 @@
     const validationPanel = document.getElementById('validation-panel');
     const showValidationBtn = document.getElementById('show-validation-btn');
     const violationsContent = document.getElementById('violations-content');
+    const remarksContent = document.getElementById('remarks-content');
     const passedContent = document.getElementById('passed-content');
-    const summaryContent = document.getElementById('summary-content');
+    const STREAM_END_TOKEN = '[[ARCHASSISTANT_STREAM_END]]';
 
     let uploadedFile = null;
     let uploadedDocumentId = null;
@@ -430,7 +431,7 @@
 
     // ---------- ПАНЕЛЬ РЕЗУЛЬТАТОВ ----------
     window.switchValidationTab = function(tab) {
-        const tabs = ['violations', 'passed', 'summary'];
+        const tabs = ['violations', 'remarks', 'passed'];
         tabs.forEach(t => {
             const tabBtn = document.getElementById(`tab-${t}`);
             const content = document.getElementById(`${t}-content`);
@@ -1062,6 +1063,7 @@
 
         const hasReportSection = [
             'наруш', 'несоответ', 'пройден', 'позитив', 'рекомендац', 'оценка зрелости', 'уровень зрелости',
+            'отчёт проверки архитектурного решения',
             'architecture compliance validation report', 'standard compliance', 'security violations',
             'technical compliance issues', 'issue:', 'violation:', 'recommendation:', 'compliance summary'
         ].some(token => normalized.includes(token));
@@ -1073,163 +1075,256 @@
     function resetValidationPanel() {
         lastValidationResults = null;
         if (violationsContent) violationsContent.innerHTML = EMPTY_VALIDATION_HTML;
+        if (remarksContent) remarksContent.innerHTML = EMPTY_VALIDATION_HTML;
         if (passedContent) passedContent.innerHTML = EMPTY_VALIDATION_HTML;
-        if (summaryContent) summaryContent.innerHTML = EMPTY_VALIDATION_HTML;
-        updateValidationTabCounters(0, 0);
+        updateValidationTabCounters(0, 0, 0);
         if (showValidationBtn) showValidationBtn.classList.add('hidden');
         if (validationPanel) validationPanel.classList.add('hidden');
     }
 
     function showValidationLoading() {
-        if (!violationsContent || !passedContent || !summaryContent) return;
-
-        violationsContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Анализирую отчёт проверки...</p>';
-        passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Жду завершения генерации...</p>';
-        summaryContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Сводка появится после ответа модели</p>';
-        updateValidationTabCounters(0, 0);
+        if (!violationsContent || !remarksContent || !passedContent) return;
+        violationsContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Формирую нарушения...</p>';
+        remarksContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Формирую замечания...</p>';
+        passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Формирую пройденные тесты...</p>';
+        updateValidationTabCounters(0, 0, 0);
         showValidationPanel();
     }
 
-    function updateValidationTabCounters(violationsCount, passedCount) {
+    function updateValidationTabCounters(violationsCount, remarksCount, passedCount) {
         const lang = localStorage.getItem('language') || 'ru';
         const labels = {
             violations: [lang === 'en' ? 'Violations' : 'Нарушения', violationsCount],
-            passed: [lang === 'en' ? 'Passed' : 'Пройдено', passedCount],
-            summary: [lang === 'en' ? 'Summary' : 'Сводка', null]
+            remarks: [lang === 'en' ? 'Remarks' : 'Замечания', remarksCount],
+            passed: [lang === 'en' ? 'Passed Tests' : 'Пройденные тесты', passedCount]
         };
 
         Object.entries(labels).forEach(([key, [label, count]]) => {
             const tab = document.getElementById(`tab-${key}`);
             if (!tab) return;
-            tab.innerHTML = count === null
-                ? label
-                : `${label} <span class="validation-count">${count}</span>`;
+            tab.innerHTML = `${label} <span class="validation-count">${count}</span>`;
         });
     }
 
-    function parseAndDisplayValidationResults(responseText, options = {}) {
-        if (!violationsContent || !passedContent || !summaryContent) return;
+    function normalizePanelArray(value) {
+        return Array.isArray(value) ? value : [];
+    }
 
-        lastValidationResults = responseText;
+    function renderTemplateFields(fields) {
+        return fields
+            .filter(([_, value]) => Boolean(String(value || '').trim()))
+            .map(([label, value]) => `
+                <div class="validation-template-row">
+                    <div class="validation-template-label">${escapeHtml(label)}</div>
+                    <div class="validation-template-value">${escapeHtmlMultiline(String(value))}</div>
+                </div>
+            `)
+            .join('');
+    }
+
+    function normalizePanelValue(value) {
+        return normalizeDetailValue(value) || '';
+    }
+
+    function buildCardCopyText(title, fields) {
+        const lines = [title];
+        fields.forEach(([label, value]) => {
+            const normalized = normalizePanelValue(value);
+            if (normalized) lines.push(`${label}: ${normalized}`);
+        });
+        return lines.join('\n');
+    }
+
+    function createTemplateCard(type, icon, title, fields, code = '', severity = '') {
+        const card = document.createElement('div');
+        card.className = `criteria-card ${type}`;
+        const normalizedTitle = normalizePanelValue(title) || 'Пункт проверки';
+        const copyText = buildCardCopyText(normalizedTitle, fields);
+        const severityBadge = severity
+            ? `<span class="severity-badge severity-${escapeHtml(severity.toLowerCase())}">${escapeHtml(severity)}</span>`
+            : '';
+        const codeBadge = code ? `<span class="font-mono text-xs text-primary">[${escapeHtml(code)}]</span>` : '';
+        const encodedCopyText = encodeURIComponent(copyText);
+
+        card.innerHTML = `
+            <div class="criteria-title">
+                <span class="material-symbols-outlined ${type === 'violation' ? 'text-red-500' : type === 'remark' ? 'text-yellow-500' : 'text-green-500'}">${icon}</span>
+                ${codeBadge}
+                <span>${escapeHtml(normalizedTitle)}</span>
+                ${severityBadge}
+                <button class="message-action-btn ml-auto" onclick="copyValidationCardText(decodeURIComponent('${encodedCopyText}'))" title="Копировать">
+                    <span class="material-symbols-outlined">content_copy</span>
+                </button>
+            </div>
+            <div class="validation-template-block">
+                ${renderTemplateFields(fields)}
+            </div>
+        `;
+        return card;
+    }
+
+    window.copyValidationCardText = async function(text) {
+        try {
+            await navigator.clipboard.writeText(text || '');
+            showToast('✅ Карточка скопирована', 1200);
+        } catch (error) {
+            console.error('Ошибка копирования карточки:', error);
+            showToast('❌ Не удалось скопировать', 1200);
+        }
+    };
+
+    function createViolationTemplateCard(item) {
+        return createTemplateCard(
+            'violation',
+            'error',
+            item.title,
+            [
+                ['Стандарт', item.standard],
+                ['Описание проблемы', item.problemDescription],
+                ['Почему это важно', item.whyImportant],
+                ['Рекомендация', item.recommendation]
+            ],
+            item.code || '',
+            item.severity || ''
+        );
+    }
+
+    function createRemarkTemplateCard(item) {
+        return createTemplateCard(
+            'remark',
+            'warning',
+            item.title,
+            [
+                ['Стандарт', item.standard],
+                ['Описание замечания', item.remarkDescription],
+                ['Влияние', item.impact],
+                ['Рекомендация', item.recommendation]
+            ],
+            item.code || '',
+            item.severity || ''
+        );
+    }
+
+    function createPassedTemplateCard(item) {
+        return createTemplateCard(
+            'passed',
+            'check_circle',
+            item.title,
+            [
+                ['Стандарт', item.standard],
+                ['Что проверялось', item.whatChecked],
+                ['Что обнаружено', item.whatFound],
+                ['Результат', item.result]
+            ],
+            item.code || '',
+            ''
+        );
+    }
+
+    function fallbackPanelFromReport(responseText) {
         const report = extractValidationReport(responseText);
+        const violations = [];
+        const remarks = [];
+
+        (report.violations || []).forEach(item => {
+            const severity = (item.severity || '').toUpperCase();
+            if (severity === 'CRITICAL' || severity === 'HIGH') {
+                violations.push({
+                    code: item.code || '',
+                    severity: severity || 'INFO',
+                    title: item.criteria || item.category || 'Найдено несоответствие',
+                    standard: '',
+                    problemDescription: item.description || '',
+                    whyImportant: '',
+                    recommendation: item.recommendation || ''
+                });
+            } else {
+                remarks.push({
+                    code: item.code || '',
+                    severity: severity || 'INFO',
+                    title: item.criteria || item.category || 'Обнаружено замечание',
+                    standard: '',
+                    remarkDescription: item.description || '',
+                    impact: '',
+                    recommendation: item.recommendation || ''
+                });
+            }
+        });
+
+        const passedTests = (report.passed || []).map(item => ({
+            code: item.code || '',
+            title: item.criteria || item.category || 'Пройденный тест',
+            standard: '',
+            whatChecked: item.criteria || '',
+            whatFound: item.description || '',
+            result: 'PASSED'
+        }));
+
+        return {
+            sourceFile: report.sourceFile || '',
+            maturity: {
+                overall: report.maturity?.display || '',
+                description: report.maturity?.description || ''
+            },
+            violations,
+            remarks,
+            passedTests
+        };
+    }
+
+    async function requestValidationPanelFromAI(responseText, sourceName = '') {
+        const res = await fetch('/api/ai/validate/panel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ report: responseText, sourceName })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+    }
+
+    async function parseAndDisplayValidationResults(responseText, options = {}) {
+        if (!violationsContent || !remarksContent || !passedContent) return;
+        lastValidationResults = responseText;
+
+        let panel;
+        try {
+            const sourceName = extractReportSourceFile(responseText);
+            panel = await requestValidationPanelFromAI(responseText, sourceName);
+        } catch (error) {
+            console.error('Не удалось получить AI-панель, использую fallback-парсинг:', error);
+            panel = fallbackPanelFromReport(responseText);
+        }
+
+        const violations = normalizePanelArray(panel.violations);
+        const remarks = normalizePanelArray(panel.remarks);
+        const passedTests = normalizePanelArray(panel.passedTests);
 
         violationsContent.innerHTML = '';
+        remarksContent.innerHTML = '';
         passedContent.innerHTML = '';
-        summaryContent.innerHTML = '';
-        updateValidationTabCounters(report.violations.length, report.passed.length);
 
-        if (report.violations.length === 0) {
-            violationsContent.innerHTML = '<p class="text-green-500 text-sm text-center py-4">Нарушений не обнаружено</p>';
+        updateValidationTabCounters(violations.length, remarks.length, passedTests.length);
+
+        if (violations.length === 0) {
+            violationsContent.innerHTML = '<p class="text-green-500 text-sm text-center py-4">Критичных нарушений не обнаружено</p>';
         } else {
-            report.violations.forEach(v => violationsContent.appendChild(createViolationCard(v)));
+            violations.forEach(item => violationsContent.appendChild(createViolationTemplateCard(item)));
         }
 
-        if (report.passed.length === 0) {
-            passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Пройденные проверки не выделены</p>';
+        if (remarks.length === 0) {
+            remarksContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Замечаний не обнаружено</p>';
         } else {
-            report.passed.forEach(p => passedContent.appendChild(createPassedCard(p)));
+            remarks.forEach(item => remarksContent.appendChild(createRemarkTemplateCard(item)));
         }
 
-        summaryContent.innerHTML = createSummaryHTML(report);
+        if (passedTests.length === 0) {
+            passedContent.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Пройденные тесты не выделены</p>';
+        } else {
+            passedTests.forEach(item => passedContent.appendChild(createPassedTemplateCard(item)));
+        }
 
         if (showValidationBtn) showValidationBtn.classList.remove('hidden');
         if (options.openPanel !== false) showValidationPanel();
-    }
-
-    function createViolationCard(violation) {
-        const card = document.createElement('div');
-        card.className = 'criteria-card violation';
-
-        const codeDisplay = violation.code ? `<span class="font-mono text-xs text-primary mr-2">[${violation.code}]</span>` : '';
-        const severity = violation.severity || 'INFO';
-        const severityClass = `severity-${severity.toLowerCase()}`;
-        const recommendation = normalizeDetailValue(violation.recommendation);
-        const fileValue = normalizeDetailValue(violation.file);
-        const pointValue = normalizeDetailValue(violation.point);
-        const metaRows = [
-            fileValue ? `<div><span>Файл</span><strong>${escapeHtml(fileValue)}</strong></div>` : '',
-            pointValue ? `<div><span>Пункт</span><strong>${escapeHtml(pointValue)}</strong></div>` : ''
-        ].filter(Boolean);
-        const metaHtml = metaRows.length ? `<div class="validation-meta-grid">${metaRows.join('')}</div>` : '';
-        const recommendationHtml = recommendation
-            ? `<div class="recommendation">
-                <strong class="text-primary flex items-center gap-1">
-                    <span class="material-symbols-outlined text-sm">lightbulb</span>
-                    Рекомендация:
-                </strong>
-                <div class="mt-1">${escapeHtmlMultiline(recommendation)}</div>
-            </div>`
-            : '';
-
-        card.innerHTML = `
-            <div class="criteria-title">
-                <span class="material-symbols-outlined text-red-500">error</span>
-                ${codeDisplay}
-                <span>${escapeHtml(violation.criteria)}</span>
-                <span class="severity-badge ${severityClass}">${escapeHtml(severity)}</span>
-            </div>
-            ${metaHtml}
-            <div class="criteria-description">${escapeHtmlMultiline(violation.description)}</div>
-            ${recommendationHtml}
-        `;
-        return card;
-    }
-
-    function createPassedCard(item) {
-        const card = document.createElement('div');
-        card.className = 'criteria-card passed';
-        const fileValue = normalizeDetailValue(item.file);
-        const pointValue = normalizeDetailValue(item.point);
-        const metaRows = [
-            fileValue ? `<div><span>Файл</span><strong>${escapeHtml(fileValue)}</strong></div>` : '',
-            pointValue ? `<div><span>Пункт</span><strong>${escapeHtml(pointValue)}</strong></div>` : ''
-        ].filter(Boolean);
-        const metaHtml = metaRows.length ? `<div class="validation-meta-grid">${metaRows.join('')}</div>` : '';
-        card.innerHTML = `
-            <div class="criteria-title">
-                <span class="material-symbols-outlined text-green-500">check_circle</span>
-                <span>${escapeHtml(item.criteria || item.category)}</span>
-            </div>
-            ${metaHtml}
-            <div class="criteria-description">${escapeHtmlMultiline(item.description)}</div>
-        `;
-        return card;
-    }
-
-    function createSummaryHTML(report) {
-        const { violations, passed, maturity, summary, conclusion, score } = report;
-        const scoreClass = score >= 80 ? 'text-green-500' : score >= 50 ? 'text-yellow-500' : 'text-red-500';
-        const maturityValue = maturity.display || (maturity.level ? `${maturity.level}/5` : '—');
-
-        return `
-            <div class="space-y-4">
-                <div class="text-center py-4">
-                    <div class="text-4xl font-bold ${scoreClass}">${score}%</div>
-                    <div class="text-sm text-gray-500 mt-1">${escapeHtml(summary)}</div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="validation-stat bg-green-500/10 text-center">
-                        <div class="text-2xl font-bold text-green-500">${passed.length}</div>
-                        <div class="text-xs text-gray-500">Пройдено</div>
-                    </div>
-                    <div class="validation-stat bg-red-500/10 text-center">
-                        <div class="text-2xl font-bold text-red-500">${violations.length}</div>
-                        <div class="text-xs text-gray-500">Нарушений</div>
-                    </div>
-                </div>
-                <div class="validation-stat bg-primary/10 text-center">
-                    <div class="text-sm text-gray-400">Уровень зрелости</div>
-                    <div class="text-xl font-bold text-primary">${maturityValue}</div>
-                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(maturity.description)}</div>
-                </div>
-                ${conclusion ? `
-                <div class="validation-note bg-surface-container-high/50 border border-outline-variant">
-                    <div class="text-xs text-gray-400 mb-1">Заключение</div>
-                    <div class="text-sm">${escapeHtml(conclusion)}</div>
-                </div>
-                ` : ''}
-            </div>
-        `;
     }
 
     function escapeHtml(text) {
@@ -1369,19 +1464,11 @@
         if (shouldClearAttachment) clearAttachedFile();
 
         currentEventSource = new EventSource(url);
+        let streamFinished = false;
 
-        currentEventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                fullText += data.content || '';
-            } catch {
-                fullText += event.data;
-            }
-            renderAssistantMarkdown(aiContainer, fullText);
-            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-        };
-
-        currentEventSource.onerror = (event) => {
+        const finalizeValidationStream = () => {
+            if (streamFinished) return;
+            streamFinished = true;
             currentEventSource.close();
             setLoading(false);
             if (fullText) {
@@ -1397,6 +1484,31 @@
                 renderAssistantMarkdown(aiContainer, errorText);
             }
             clearAttachedFile();
+        };
+
+        currentEventSource.onmessage = (event) => {
+            let chunk = '';
+            try {
+                const data = JSON.parse(event.data);
+                chunk = data.content || '';
+            } catch {
+                chunk = event.data || '';
+            }
+
+            if (chunk === STREAM_END_TOKEN) {
+                finalizeValidationStream();
+                return;
+            }
+
+            fullText += chunk;
+            renderAssistantMarkdown(aiContainer, fullText);
+            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+
+        currentEventSource.onerror = () => {
+            // Если маркер конца потока уже пришёл, это штатное закрытие.
+            if (streamFinished) return;
+            finalizeValidationStream();
         };
     };
 
@@ -1459,15 +1571,11 @@
         let fullText = '';
         const url = `${endpoint}?${paramName}=${encodeURIComponent(text)}&chatId=${currentChatId}`;
         currentEventSource = new EventSource(url);
+        let streamFinished = false;
 
-        currentEventSource.onmessage = (e) => {
-            try { fullText += JSON.parse(e.data).content || ''; }
-            catch { fullText += e.data; }
-            renderAssistantMarkdown(aiContainer, fullText);
-            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-        };
-
-        currentEventSource.onerror = () => {
+        const finalizeChatStream = () => {
+            if (streamFinished) return;
+            streamFinished = true;
             currentEventSource.close();
             setLoading(false);
             if (fullText) {
@@ -1480,6 +1588,26 @@
                     parseAndDisplayValidationResults(fullText);
                 }
             }
+        };
+
+        currentEventSource.onmessage = (e) => {
+            let chunk = '';
+            try { chunk = JSON.parse(e.data).content || ''; }
+            catch { chunk = e.data || ''; }
+
+            if (chunk === STREAM_END_TOKEN) {
+                finalizeChatStream();
+                return;
+            }
+
+            fullText += chunk;
+            renderAssistantMarkdown(aiContainer, fullText);
+            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+
+        currentEventSource.onerror = () => {
+            if (streamFinished) return;
+            finalizeChatStream();
         };
     };
 
@@ -2238,8 +2366,8 @@
                 'drop-file': 'Перетащите файл сюда или выберите на компьютере',
                 'validation-results': 'Результаты проверки',
                 'violations-tab': 'Нарушения',
-                'passed-tab': 'Пройдено',
-                'summary-tab': 'Сводка',
+                'remarks-tab': 'Замечания',
+                'passed-tab': 'Пройденные тесты',
                 'threads': 'Потоки CPU (num_thread)',
                 'threads-recommend': 'Рекомендуется: 8-10 для 6-ядерного CPU',
                 'temperature': 'Температура (креативность)',
@@ -2298,8 +2426,8 @@
                 'drop-file': 'Drop a file here or choose from your computer',
                 'validation-results': 'Validation results',
                 'violations-tab': 'Violations',
-                'passed-tab': 'Passed',
-                'summary-tab': 'Summary',
+                'remarks-tab': 'Remarks',
+                'passed-tab': 'Passed Tests',
                 'threads': 'CPU threads (num_thread)',
                 'threads-recommend': 'Recommended: 8-10 for 6-core CPU',
                 'temperature': 'Temperature (creativity)',
@@ -2506,10 +2634,10 @@
 
         const tabViolations = document.getElementById('tab-violations');
         if (tabViolations) tabViolations.firstChild.textContent = t['violations-tab'];
+        const tabRemarks = document.getElementById('tab-remarks');
+        if (tabRemarks) tabRemarks.firstChild.textContent = t['remarks-tab'];
         const tabPassed = document.getElementById('tab-passed');
         if (tabPassed) tabPassed.firstChild.textContent = t['passed-tab'];
-        const tabSummary = document.getElementById('tab-summary');
-        if (tabSummary) tabSummary.textContent = t['summary-tab'];
 
         // Текст в модалках
         const termsTitle = document.querySelector('#terms-modal h2');
@@ -3355,15 +3483,11 @@
 
             const url = `/api/ai/stream?message=${encodeURIComponent(newText)}&chatId=${currentChatId}`;
             currentEventSource = new EventSource(url);
+            let streamFinished = false;
 
-            currentEventSource.onmessage = (e) => {
-                try { fullText += JSON.parse(e.data).content || ''; }
-                catch { fullText += e.data; }
-                renderAssistantMarkdown(aiContainer, fullText);
-                if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-            };
-
-            currentEventSource.onerror = () => {
+            const finalizeEditedStream = () => {
+                if (streamFinished) return;
+                streamFinished = true;
                 currentEventSource.close();
                 setLoading(false);
                 if (fullText) {
@@ -3373,6 +3497,26 @@
                         body: JSON.stringify({ chatId: currentChatId, role: 'assistant', content: fullText })
                     });
                 }
+            };
+
+            currentEventSource.onmessage = (e) => {
+                let chunk = '';
+                try { chunk = JSON.parse(e.data).content || ''; }
+                catch { chunk = e.data || ''; }
+
+                if (chunk === STREAM_END_TOKEN) {
+                    finalizeEditedStream();
+                    return;
+                }
+
+                fullText += chunk;
+                renderAssistantMarkdown(aiContainer, fullText);
+                if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+            };
+
+            currentEventSource.onerror = () => {
+                if (streamFinished) return;
+                finalizeEditedStream();
             };
 
         } catch (e) {
@@ -3574,19 +3718,11 @@
         if (shouldClearAttachment) clearAttachedFile();
 
         currentEventSource = new EventSource(url);
+        let streamFinished = false;
 
-        currentEventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                fullText += data.content || '';
-            } catch {
-                fullText += event.data;
-            }
-            renderAssistantMarkdown(aiContainer, fullText);
-            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-        };
-
-        currentEventSource.onerror = (event) => {
+        const finalizeBusinessStream = () => {
+            if (streamFinished) return;
+            streamFinished = true;
             currentEventSource.close();
             setLoading(false);
             if (fullText) {
@@ -3601,6 +3737,30 @@
                 renderAssistantMarkdown(aiContainer, errorText);
             }
             clearAttachedFile();
+        };
+
+        currentEventSource.onmessage = (event) => {
+            let chunk = '';
+            try {
+                const data = JSON.parse(event.data);
+                chunk = data.content || '';
+            } catch {
+                chunk = event.data || '';
+            }
+
+            if (chunk === STREAM_END_TOKEN) {
+                finalizeBusinessStream();
+                return;
+            }
+
+            fullText += chunk;
+            renderAssistantMarkdown(aiContainer, fullText);
+            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+
+        currentEventSource.onerror = () => {
+            if (streamFinished) return;
+            finalizeBusinessStream();
         };
     };
 
