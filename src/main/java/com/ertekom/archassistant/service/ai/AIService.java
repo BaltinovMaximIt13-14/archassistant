@@ -1,5 +1,7 @@
 package com.ertekom.archassistant.service.ai;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ertekom.archassistant.domain.entity.Document;
 import com.ertekom.archassistant.repository.DocumentRepository;
 import com.ertekom.archassistant.service.learning.KnowledgeSearchService;
@@ -19,6 +21,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -36,17 +39,20 @@ public class AIService {
   KnowledgeSearchService searchService;
   DocumentRepository documentRepository;
   JdbcTemplate jdbcTemplate;
+  ObjectMapper objectMapper;
   ConcurrentMap<String, String> validationReportCache = new ConcurrentHashMap<>();
 
+  public static final String STREAM_END_TOKEN = "[[ARCHASSISTANT_STREAM_END]]";
   private static final int TOP_K = 5;
   private static final int VALIDATION_TOP_K = 6;
   private static final int VALIDATION_CACHE_LIMIT = 100;
-  private static final int MAX_VALIDATION_SOLUTION_CHARS = 25_000;
+  private static final int MAX_VALIDATION_SOLUTION_CHARS = 30_000;
   private static final int MAX_CONTEXT_CHUNK_CHARS = 1_400;
   private static final int MAX_BUSINESS_INPUT_CHARS = 30_000;
-  private static final String VALIDATION_PROMPT_VERSION = "validation-v3";
+  private static final int MAX_PANEL_SOURCE_CHARS = 35_000;
+  private static final String VALIDATION_PROMPT_VERSION = "validation-v4";
   private static final String VALIDATION_SEARCH_PREFIX = """
-      OpenAPI TOGAF ArchiMate TM Forum SID Security Data Integration DevOps Infrastructure
+      Архитектура ИТ-систем безопасность данные интеграция API эксплуатация надежность масштабируемость
       """;
   private static final String VALIDATION_REPORT_FORMAT = """
       # Отчёт проверки архитектурного решения
@@ -57,7 +63,6 @@ public class AIService {
       | Идентификатор проверки | VAL-YYYYMMDD-XXX |
       | Дата проверки | YYYY-MM-DD |
       | Проверяемый документ | фактическое имя файла |
-      | Набор стандартов | TOGAF, ArchiMate, OpenAPI, TM Forum SID, Security, Data, Integration, DevOps |
       | Общий статус | PASSED / PARTIALLY PASSED / FAILED |
       | Общий уровень зрелости | N/100 |
 
@@ -69,58 +74,69 @@ public class AIService {
          Файл: фактическое имя файла
          Пункт документа: конкретный раздел, подпункт или фрагмент цитаты
          Severity: CRITICAL / HIGH / MEDIUM / LOW / INFO
+         Стандарт: название контрольного правила/методики (если применимо)
          Описание: что именно нарушено и почему
-         Доказательства: цитата/фрагмент из решения
-         Риск: влияние на бизнес и/или эксплуатацию
+         Почему это важно: последствия для бизнеса, архитектуры, эксплуатации или безопасности
          Рекомендация: конкретное исправление
 
-      ## 4. Пройденные проверки
+      ## 4. Замечания
+      1. RM-001: Короткий заголовок замечания
+         Файл: фактическое имя файла
+         Пункт документа: конкретный раздел, подпункт или фрагмент цитаты
+         Severity: MEDIUM / LOW / INFO
+         Стандарт: название контрольного правила/методики (если применимо)
+         Описание замечания: что стоит доработать
+         Влияние: к чему приведёт, если не исправить
+         Рекомендация: как улучшить
+
+      ## 5. Пройденные тесты
       1. П-001: Что соответствует требованиям
          Файл: фактическое имя файла
          Пункт документа: конкретный раздел, подпункт или фрагмент цитаты
-         Обоснование: факт соответствия из решения
-         Доказательства: цитата/фрагмент из решения
+         Стандарт: название контрольного правила/методики (если применимо)
+         Что проверялось: какое требование или критерий
+         Что обнаружено: факт соответствия из решения
+         Результат: PASSED
 
-      ## 5. Матрица соответствия стандартам
-      | Стандарт | Статус | Комментарий |
+      ## 6. Матрица контрольных областей
+      | Область | Статус | Комментарий |
       |---|---|---|
-      | TOGAF | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
-      | ArchiMate | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
-      | OpenAPI | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
-      | TMF SID | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
-      | Security | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
-      | Data | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
-      | Integration | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
-      | DevOps | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
+      | Бизнес-архитектура | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
+      | Прикладная архитектура | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
+      | Данные | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
+      | Технологии | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
+      | Безопасность | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
+      | Интеграция | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
+      | DevOps/Эксплуатация | PASSED / PARTIALLY PASSED / FAILED | развёрнутый комментарий |
 
-      ## 6. Анализ бизнес-архитектуры
+      ## 7. Анализ бизнес-архитектуры
       Детальный анализ целей, процессов, ролей, KPI, gap-анализ.
 
-      ## 7. Анализ прикладной архитектуры
+      ## 8. Анализ прикладной архитектуры
       Детальный анализ сервисов, API, интеграций, связности и независимости.
 
-      ## 8. Анализ данных
+      ## 9. Анализ данных
       Детальный анализ доменов данных, моделей, качества данных, владения данными.
 
-      ## 9. Анализ технологий
+      ## 10. Анализ технологий
       Детальный анализ стека, устаревших технологий, масштабируемости и поддерживаемости.
 
-      ## 10. Анализ безопасности
+      ## 11. Анализ безопасности
       Детальный анализ аутентификации, авторизации, шифрования, аудита и уязвимостей.
 
-      ## 11. Архитектурные риски
+      ## 12. Архитектурные риски
       Список рисков с вероятностью, влиянием и приоритетом.
 
-      ## 12. Рекомендации и план исправления
+      ## 13. Рекомендации и план исправления
       Приоритет 1 (критично), Приоритет 2 (важно), Приоритет 3 (улучшения),
       с ответственными ролями и ориентировочными сроками.
 
-      ## 13. Оценка зрелости и финальное заключение
+      ## 14. Оценка зрелости и финальное заключение
       Оценка по направлениям (Business, Application, Data, Technology, Security, Governance),
       общий вывод и условия согласования.
 
-      ## 14. Machine Readable Summary
-      {"overallScore":0,"status":"PASSED|PARTIALLY PASSED|FAILED","criticalViolations":0,"highViolations":0,"mediumViolations":0,"lowViolations":0,"passedChecks":0,"failedChecks":0,"domains":{"business":0,"application":0,"data":0,"technology":0,"security":0,"governance":0,"integration":0,"devops":0}}
+      ## 15. Machine Readable Summary
+      {"overallScore":0,"status":"PASSED|PARTIALLY PASSED|FAILED","criticalViolations":0,"highViolations":0,"remarks":0,"passedTests":0,"domains":{"business":0,"application":0,"data":0,"technology":0,"security":0,"governance":0,"integration":0,"devops":0}}
       """;
 
   private List<Map<String, String>> getChatHistory(UUID chatId) {
@@ -208,6 +224,72 @@ public class AIService {
         + input.substring(input.length() - tailSize);
   }
 
+  public String streamEndToken() {
+    return STREAM_END_TOKEN;
+  }
+
+  private String extractJsonObject(String raw) {
+    if (raw == null || raw.isBlank()) return "";
+    String cleaned = raw.trim()
+        .replace("```json", "")
+        .replace("```", "")
+        .trim();
+
+    int first = cleaned.indexOf('{');
+    if (first < 0) return "";
+
+    int depth = 0;
+    boolean inString = false;
+    boolean escaped = false;
+    for (int i = first; i < cleaned.length(); i++) {
+      char ch = cleaned.charAt(i);
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (ch == '\\') {
+          escaped = true;
+        } else if (ch == '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch == '"') {
+        inString = true;
+        continue;
+      }
+      if (ch == '{') depth++;
+      if (ch == '}') {
+        depth--;
+        if (depth == 0) {
+          return cleaned.substring(first, i + 1);
+        }
+      }
+    }
+
+    return "";
+  }
+
+  private Map<String, Object> emptyValidationPanel(String sourceName) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("sourceFile", resolveSourceName(sourceName));
+    payload.put("maturity", Map.of("overall", "", "description", ""));
+    payload.put("violations", new ArrayList<>());
+    payload.put("remarks", new ArrayList<>());
+    payload.put("passedTests", new ArrayList<>());
+    return payload;
+  }
+
+  private Map<String, Object> normalizeValidationPanel(Map<String, Object> panel, String sourceName) {
+    Map<String, Object> normalized = new LinkedHashMap<>();
+    normalized.put("sourceFile", panel.getOrDefault("sourceFile", resolveSourceName(sourceName)));
+    normalized.put("maturity", panel.getOrDefault("maturity", Map.of("overall", "", "description", "")));
+    normalized.put("violations", panel.getOrDefault("violations", new ArrayList<>()));
+    normalized.put("remarks", panel.getOrDefault("remarks", new ArrayList<>()));
+    normalized.put("passedTests", panel.getOrDefault("passedTests", new ArrayList<>()));
+    return normalized;
+  }
+
   public Flux<String> askStream(String question, UUID chatId) {
     try {
       List<String> chunks = searchService.findRelevantChunks(question, TOP_K);
@@ -263,16 +345,19 @@ public class AIService {
           Не используй английские заголовки Issue / Violation / Recommendation.
           Не используй историю чата. Не выводи рассуждения и <think>.
           Не сокращай ответ искусственно: отчёт должен быть объёмным и содержательным.
-          Для каждого нарушения обязательно укажи Файл, Пункт документа, Severity, Описание, Доказательства, Риск, Рекомендация.
-          Для каждой пройденной проверки обязательно укажи Файл, Пункт документа, Обоснование и Доказательства.
-          В "Пройденные проверки" перечисляй только реально найденные соответствия. Не пиши "отсутствует, но не проверялось".
+          Для каждого нарушения обязательно укажи Файл, Пункт документа, Severity, Стандарт, Описание, Почему это важно, Рекомендация.
+          Для каждого замечания обязательно укажи Файл, Пункт документа, Severity, Стандарт, Описание замечания, Влияние, Рекомендация.
+          Для каждого пройденного теста обязательно укажи Файл, Пункт документа, Стандарт, Что проверялось, Что обнаружено, Результат.
+          В "Пройденные тесты" перечисляй только реально найденные соответствия. Не пиши "отсутствует, но не проверялось".
           В поле "Файл" всегда указывай фактическое имя проверяемого документа: "%s".
           В поле "Пункт документа" всегда указывай конкретный раздел, подпункт или короткую цитату (формат: Фрагмент: "...").
           Строго запрещено использовать заглушки и шаблонные маркеры: "Не указан", "Не указано", "Проверяемый документ", "N/A", "<...>".
-          Коды нарушений: OA, TG, AR, SID, SEC, DATA, INFRA, DEVOPS, INT.
+          Коды нарушений: OA, TG, AR, SID, SEC, DATA, INFRA, DEVOPS, INT. Коды замечаний: RM-001, RM-002...
           Severity сортируй так: CRITICAL, HIGH, MEDIUM, LOW, INFO.
           Общий статус FAILED, если есть HIGH или CRITICAL.
-          Не придумывай факты: опирайся только на СТАНДАРТЫ и РЕШЕНИЕ.
+          Всегда укажи "Общий уровень зрелости: N/100", даже если оценка приблизительная.
+          Не создавай отдельные пункты с заголовком "Критика". Критику объединяй с соответствующим нарушением в поле "Почему это важно".
+          Не придумывай факты: опирайся только на КОНТЕКСТ ПРОВЕРКИ и РЕШЕНИЕ.
           Если фактов недостаточно, явно укажи, каких именно данных не хватает, и почему это ограничивает вывод.
 
           Дата проверки: %s
@@ -281,7 +366,7 @@ public class AIService {
           ФОРМАТ ОТЧЁТА:
           %s
 
-          СТАНДАРТЫ:
+          КОНТЕКСТ ПРОВЕРКИ:
           %s
 
           РЕШЕНИЕ:
@@ -324,6 +409,69 @@ public class AIService {
     } catch (Exception e) {
       log.error("Ошибка при валидации документа: {}", e.getMessage(), e);
       return Flux.just("Ошибка при чтении документа: " + e.getMessage());
+    }
+  }
+
+  public Map<String, Object> generateValidationPanel(String validationReport, String sourceName) {
+    try {
+      String source = resolveSourceName(sourceName);
+      String report = validationReport == null ? "" : validationReport.trim();
+      if (report.isBlank()) {
+        return emptyValidationPanel(source);
+      }
+
+      String truncatedReport = report.length() > MAX_PANEL_SOURCE_CHARS
+          ? report.substring(0, MAX_PANEL_SOURCE_CHARS)
+          : report;
+
+      String prompt = """
+          /no_think
+          Ты — ИТ-аудитор. На основе готового отчёта сформируй данные для правой панели интерфейса.
+          Верни только JSON-объект без markdown, без комментариев, без пояснений.
+          Не придумывай факты: используй только данные из отчёта.
+          Не используй заглушки ("Не указано", "N/A", "<...>", "Проверяемый документ").
+          Обязательно сформируй 3 массива:
+          1) violations — только нарушения уровня CRITICAL/HIGH.
+          2) remarks — замечания уровня MEDIUM/LOW/INFO и организационные недочёты.
+          3) passedTests — только реальные пройденные тесты.
+          Запрещено создавать отдельные карточки с заголовком "Критика".
+          Если в отчёте есть пара "Проблема + Критика", объедини их в одну запись:
+          - title возьми из проблемы;
+          - whyImportant (или impact) заполни содержанием критики/последствий.
+
+          Структура JSON:
+          {
+            "sourceFile": "string",
+            "maturity": {"overall":"N/100","description":"string"},
+            "violations": [
+              {"code":"OA-001","severity":"HIGH","title":"string","standard":"string","problemDescription":"string","whyImportant":"string","recommendation":"string"}
+            ],
+            "remarks": [
+              {"code":"RM-001","severity":"MEDIUM","title":"string","standard":"string","remarkDescription":"string","impact":"string","recommendation":"string"}
+            ],
+            "passedTests": [
+              {"code":"P-001","title":"string","standard":"string","whatChecked":"string","whatFound":"string","result":"string"}
+            ]
+          }
+
+          Проверяемый документ: %s
+          ОТЧЁТ:
+          %s
+          """.formatted(source, truncatedReport);
+
+      ChatClient client = ChatClient.builder(chatModel).build();
+      String raw = client.prompt().user(prompt).call().content();
+      String json = extractJsonObject(raw);
+      if (json.isBlank()) {
+        log.warn("Не удалось извлечь JSON панели из ответа модели.");
+        return emptyValidationPanel(source);
+      }
+
+      Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<>() {});
+      return normalizeValidationPanel(parsed, source);
+    } catch (Exception e) {
+      log.error("Ошибка генерации панели проверки: {}", e.getMessage(), e);
+      return emptyValidationPanel(sourceName);
     }
   }
 
