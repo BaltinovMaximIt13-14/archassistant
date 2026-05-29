@@ -478,6 +478,9 @@
     const VALIDATION_CODE_BASE_RE = /^(OA|TG|AR|SID|SEC|DATA|INFRA|DEVOPS|INT|API|П|P|Н|N|T|TEST|STD|REQ|CR)/i;
     const SEVERITY_RE = /\b(CRITICAL|HIGH|MEDIUM|LOW|INFO)\b/i;
     const TRAILING_SEVERITY_RE = /\s*(?:[—-]\s*)?(?:Severity\s*:\s*)?(CRITICAL|HIGH|MEDIUM|LOW|INFO)\s*$/i;
+    const PLACEHOLDER_DETAIL_VALUES = new Set([
+        'не указан', 'не указано', 'проверяемый документ', 'n/a', 'na', 'none', 'unknown', '-', '—', '...'
+    ]);
 
     function normalizeReportText(text) {
         return (text || '')
@@ -498,6 +501,34 @@
             .replace(/^\s*>\s*/, '')
             .replace(/\s+/g, ' ')
             .trim();
+    }
+
+    function normalizeDetailValue(value) {
+        const cleaned = stripMarkdownSyntax(value)
+            .replace(/[«»"]/g, '')
+            .trim();
+
+        if (!cleaned) return '';
+        if (PLACEHOLDER_DETAIL_VALUES.has(cleaned.toLowerCase())) return '';
+        if (/^<.*>$/.test(cleaned)) return '';
+        return cleaned;
+    }
+
+    function extractReportSourceFile(text) {
+        const normalized = normalizeReportText(text);
+        const patterns = [
+            /(?:файл проверки|проверяемый документ|документ проверки)\s*:\s*([^\n]+)/i,
+            /\|\s*Проверяемый документ\s*\|\s*([^|]+)\|/i,
+            /(?:source file|file under review)\s*:\s*([^\n]+)/i
+        ];
+
+        for (const pattern of patterns) {
+            const match = normalized.match(pattern);
+            if (!match) continue;
+            const value = normalizeDetailValue(match[1]);
+            if (value) return value;
+        }
+        return '';
     }
 
     function stripLeadingIcon(value) {
@@ -773,8 +804,8 @@
             if (!current) return;
             current.description = stripMarkdownSyntax(current.description);
             current.recommendation = stripMarkdownSyntax(current.recommendation);
-            current.file = stripMarkdownSyntax(current.file) || 'Проверяемый документ';
-            current.point = stripMarkdownSyntax(current.point) || 'Не указан';
+            current.file = normalizeDetailValue(current.file);
+            current.point = normalizeDetailValue(current.point);
             current.severity = stripMarkdownSyntax(current.severity).toUpperCase();
             if (current.description.length > 0) items.push(current);
             current = null;
@@ -899,12 +930,13 @@
                 }
             }
 
-            violation.recommendation = recommendations.common || 'См. полный отчёт для рекомендаций';
+            violation.recommendation = recommendations.common || '';
         });
     }
 
     function extractValidationReport(text) {
         const normalizedText = normalizeReportText(text);
+        const sourceFile = extractReportSourceFile(normalizedText);
         const sections = splitReportIntoSections(normalizedText);
         const violationText = sections.violations.join('\n');
         const passedText = sections.passed.join('\n');
@@ -917,6 +949,15 @@
             ? []
             : parseListItems(passedText || extractStatusLines(normalizedText, 'passed'), 'passed');
 
+        if (sourceFile) {
+            violations.forEach(item => {
+                if (!item.file) item.file = sourceFile;
+            });
+            passed.forEach(item => {
+                if (!item.file) item.file = sourceFile;
+            });
+        }
+
         applyRecommendations(violations, recommendationsText);
 
         const maturity = extractMaturity(normalizedText, sections);
@@ -924,7 +965,7 @@
         const conclusion = extractConclusion(normalizedText, sections);
         const score = extractScore(normalizedText, violations.length, passed.length);
 
-        return { violations, passed, maturity, summary, conclusion, score };
+        return { violations, passed, maturity, summary, conclusion, score, sourceFile };
     }
 
     function extractStatusLines(text, type) {
@@ -966,7 +1007,7 @@
             }
         }
 
-        return { level: null, display: null, description: 'Не указана в отчёте' };
+        return { level: null, display: null, description: 'Оценка не определена автоматически' };
     }
 
     function extractSummary(text, sections, violationsCount, passedCount) {
@@ -1102,7 +1143,23 @@
         const codeDisplay = violation.code ? `<span class="font-mono text-xs text-primary mr-2">[${violation.code}]</span>` : '';
         const severity = violation.severity || 'INFO';
         const severityClass = `severity-${severity.toLowerCase()}`;
-        const recommendation = violation.recommendation || 'См. полный отчёт для рекомендаций';
+        const recommendation = normalizeDetailValue(violation.recommendation);
+        const fileValue = normalizeDetailValue(violation.file);
+        const pointValue = normalizeDetailValue(violation.point);
+        const metaRows = [
+            fileValue ? `<div><span>Файл</span><strong>${escapeHtml(fileValue)}</strong></div>` : '',
+            pointValue ? `<div><span>Пункт</span><strong>${escapeHtml(pointValue)}</strong></div>` : ''
+        ].filter(Boolean);
+        const metaHtml = metaRows.length ? `<div class="validation-meta-grid">${metaRows.join('')}</div>` : '';
+        const recommendationHtml = recommendation
+            ? `<div class="recommendation">
+                <strong class="text-primary flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">lightbulb</span>
+                    Рекомендация:
+                </strong>
+                <div class="mt-1">${escapeHtmlMultiline(recommendation)}</div>
+            </div>`
+            : '';
 
         card.innerHTML = `
             <div class="criteria-title">
@@ -1111,18 +1168,9 @@
                 <span>${escapeHtml(violation.criteria)}</span>
                 <span class="severity-badge ${severityClass}">${escapeHtml(severity)}</span>
             </div>
-            <div class="validation-meta-grid">
-                <div><span>Файл</span><strong>${escapeHtml(violation.file || 'Проверяемый документ')}</strong></div>
-                <div><span>Пункт</span><strong>${escapeHtml(violation.point || 'Не указан')}</strong></div>
-            </div>
+            ${metaHtml}
             <div class="criteria-description">${escapeHtmlMultiline(violation.description)}</div>
-            <div class="recommendation">
-                <strong class="text-primary flex items-center gap-1">
-                    <span class="material-symbols-outlined text-sm">lightbulb</span>
-                    Рекомендация:
-                </strong>
-                <div class="mt-1">${escapeHtmlMultiline(recommendation)}</div>
-            </div>
+            ${recommendationHtml}
         `;
         return card;
     }
@@ -1130,15 +1178,19 @@
     function createPassedCard(item) {
         const card = document.createElement('div');
         card.className = 'criteria-card passed';
+        const fileValue = normalizeDetailValue(item.file);
+        const pointValue = normalizeDetailValue(item.point);
+        const metaRows = [
+            fileValue ? `<div><span>Файл</span><strong>${escapeHtml(fileValue)}</strong></div>` : '',
+            pointValue ? `<div><span>Пункт</span><strong>${escapeHtml(pointValue)}</strong></div>` : ''
+        ].filter(Boolean);
+        const metaHtml = metaRows.length ? `<div class="validation-meta-grid">${metaRows.join('')}</div>` : '';
         card.innerHTML = `
             <div class="criteria-title">
                 <span class="material-symbols-outlined text-green-500">check_circle</span>
                 <span>${escapeHtml(item.criteria || item.category)}</span>
             </div>
-            <div class="validation-meta-grid">
-                <div><span>Файл</span><strong>${escapeHtml(item.file || 'Проверяемый документ')}</strong></div>
-                <div><span>Пункт</span><strong>${escapeHtml(item.point || 'Не указан')}</strong></div>
-            </div>
+            ${metaHtml}
             <div class="criteria-description">${escapeHtmlMultiline(item.description)}</div>
         `;
         return card;
@@ -3515,7 +3567,7 @@
         let url;
         const shouldClearAttachment = Boolean(uploadedFile);
         if (uploadedDocumentId) {
-            url = `/api/ai/business?input=${encodeURIComponent(comment)}&chatId=${currentChatId}&documentId=${uploadedDocumentId}`;
+            url = `/api/ai/business/document/${uploadedDocumentId}?message=${encodeURIComponent(comment)}&chatId=${currentChatId}`;
         } else {
             url = `/api/ai/business?input=${encodeURIComponent(comment)}&chatId=${currentChatId}`;
         }
