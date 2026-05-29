@@ -255,18 +255,18 @@
         <!-- Вкладки -->
         <div class="flex gap-2 mb-4 border-b border-outline-variant">
             <button id="tab-violations" onclick="switchValidationTab('violations')" class="px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary -mb-px">Нарушения</button>
-            <button id="tab-passed" onclick="switchValidationTab('passed')" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-300 -mb-px">Пройдено</button>
-            <button id="tab-summary" onclick="switchValidationTab('summary')" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-300 -mb-px">Сводка</button>
+            <button id="tab-remarks" onclick="switchValidationTab('remarks')" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-300 -mb-px">Замечания</button>
+            <button id="tab-passed" onclick="switchValidationTab('passed')" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-300 -mb-px">Пройденные тесты</button>
         </div>
 
         <!-- Контент вкладок -->
         <div id="violations-content" class="space-y-3">
             <p class="text-gray-500 text-sm text-center py-4">Нет данных проверки</p>
         </div>
-        <div id="passed-content" class="space-y-3 hidden">
+        <div id="remarks-content" class="space-y-3 hidden">
             <p class="text-gray-500 text-sm text-center py-4">Нет данных проверки</p>
         </div>
-        <div id="summary-content" class="space-y-3 hidden">
+        <div id="passed-content" class="space-y-3 hidden">
             <p class="text-gray-500 text-sm text-center py-4">Нет данных проверки</p>
         </div>
     </div>
