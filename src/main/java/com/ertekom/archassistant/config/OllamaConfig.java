@@ -31,10 +31,10 @@ public class OllamaConfig {
   @Value("${spring.ai.ollama.chat.options.top_p:0.1}")
   private Double topP;
 
-  @Value("${spring.ai.ollama.chat.options.num_ctx:4096}")
+  @Value("${spring.ai.ollama.chat.options.num_ctx:16384}")
   private Integer numCtx;
 
-  @Value("${spring.ai.ollama.chat.options.num_predict:1536}")
+  @Value("${spring.ai.ollama.chat.options.num_predict:4096}")
   private Integer numPredict;
 
   @Value("${spring.ai.ollama.chat.options.num_thread:8}")
